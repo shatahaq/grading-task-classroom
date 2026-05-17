@@ -13,7 +13,7 @@
             document.documentElement.classList.add('dark');
         }
     </script>
-    @vite(['resources/css/app.css', 'resources/js/app.js'])
+    <?php echo app('Illuminate\Foundation\Vite')(['resources/css/app.css', 'resources/js/app.js']); ?>
 </head>
 <body class="min-h-screen bg-lush-canvas text-lush-ink antialiased dark:bg-lush-dark dark:text-lush-fog">
     <main class="relative min-h-screen overflow-hidden">
@@ -23,7 +23,7 @@
         <div class="absolute inset-x-0 bottom-0 h-32 bg-lush-canvas clip-slant dark:bg-lush-dark-surface/80"></div>
 
         <header class="relative z-10 mx-auto flex max-w-7xl items-center justify-between px-5 py-5 sm:px-8">
-            <a href="{{ route('home') }}" class="group flex items-center gap-3 rounded-full transition-all duration-300 hover:scale-[1.02] focus:outline-none focus:ring-4 focus:ring-lush-lime/30">
+            <a href="<?php echo e(route('home')); ?>" class="group flex items-center gap-3 rounded-full transition-all duration-300 hover:scale-[1.02] focus:outline-none focus:ring-4 focus:ring-lush-lime/30">
                 <span class="flex h-12 w-12 items-center justify-center rounded-2xl bg-lush-lime text-black shadow-lime transition-transform duration-300 group-hover:rotate-3">
                     <i data-lucide="brain-circuit" class="h-6 w-6"></i>
                 </span>
@@ -53,14 +53,15 @@
                     Ruang kerja penilaian yang menghubungkan Classroom, rubrik, dan review dosen dalam alur yang rapi, cepat, dan tetap bisa dikontrol manusia.
                 </p>
 
-                @if (session('error'))
+                <?php if(session('error')): ?>
                     <section class="mt-6 rounded-2xl border border-red-400/40 bg-red-500/10 p-4 text-sm font-bold text-red-200" role="alert">
-                        {{ session('error') }}
+                        <?php echo e(session('error')); ?>
+
                     </section>
-                @endif
+                <?php endif; ?>
 
                 <div class="mt-10 flex flex-wrap items-center gap-4">
-                    <a href="{{ route('auth.google.redirect') }}" class="group inline-flex items-center justify-center gap-3 rounded-full bg-lush-lime px-6 py-4 text-sm font-extrabold text-black shadow-lime transition-all duration-300 hover:scale-[1.02] hover:bg-lush-lime/85 hover:shadow-[0_0_36px_rgba(193,255,0,0.38)] focus:outline-none focus:ring-4 focus:ring-lush-lime/30">
+                    <a href="<?php echo e(route('auth.google.redirect')); ?>" class="group inline-flex items-center justify-center gap-3 rounded-full bg-lush-lime px-6 py-4 text-sm font-extrabold text-black shadow-lime transition-all duration-300 hover:scale-[1.02] hover:bg-lush-lime/85 hover:shadow-[0_0_36px_rgba(193,255,0,0.38)] focus:outline-none focus:ring-4 focus:ring-lush-lime/30">
                         <svg class="h-5 w-5" viewBox="0 0 24 24" aria-hidden="true">
                             <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
                             <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
@@ -94,25 +95,25 @@
                     </div>
 
                     <div class="mt-8 grid gap-3">
-                        @foreach ([
+                        <?php $__currentLoopData = [
                             ['task' => 'Tugas tersinkron', 'state' => 'Selesai', 'icon' => 'circle-check', 'tone' => 'text-emerald-300', 'score' => '78.5'],
                             ['task' => 'Submission perlu review', 'state' => 'Review', 'icon' => 'alert-triangle', 'tone' => 'text-amber-300', 'score' => '64.0'],
                             ['task' => 'Workflow siap jalan', 'state' => 'Siap', 'icon' => 'clock', 'tone' => 'text-white/55', 'score' => 'Ready'],
-                        ] as $item)
+                        ]; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $item): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
                             <article class="group rounded-2xl border border-white/10 bg-black/18 p-5 ring-1 ring-white/5 transition-all duration-300 hover:translate-x-1 hover:border-lush-lime/35 hover:bg-black/28">
                                 <div class="flex items-start justify-between gap-4">
                                     <div class="min-w-0">
-                                        <h3 class="truncate text-sm font-extrabold text-white">{{ $item['task'] }}</h3>
+                                        <h3 class="truncate text-sm font-extrabold text-white"><?php echo e($item['task']); ?></h3>
                                         <p class="mt-1 text-xs font-bold uppercase tracking-wide text-white/35">Google Classroom</p>
                                     </div>
-                                    <i data-lucide="{{ $item['icon'] }}" class="h-5 w-5 {{ $item['tone'] }}"></i>
+                                    <i data-lucide="<?php echo e($item['icon']); ?>" class="h-5 w-5 <?php echo e($item['tone']); ?>"></i>
                                 </div>
                                 <div class="mt-5 flex items-end justify-between">
-                                    <span class="rounded-full border border-white/10 px-3 py-1.5 text-xs font-bold text-white/60">{{ $item['state'] }}</span>
-                                    <span class="font-mono text-2xl font-extrabold text-lush-lime">{{ $item['score'] }}</span>
+                                    <span class="rounded-full border border-white/10 px-3 py-1.5 text-xs font-bold text-white/60"><?php echo e($item['state']); ?></span>
+                                    <span class="font-mono text-2xl font-extrabold text-lush-lime"><?php echo e($item['score']); ?></span>
                                 </div>
                             </article>
-                        @endforeach
+                        <?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?>
                     </div>
                 </section>
             </aside>
@@ -120,3 +121,4 @@
     </main>
 </body>
 </html>
+<?php /**PATH C:\laragon\www\PW-2\Projek_AI\resources\views/welcome.blade.php ENDPATH**/ ?>

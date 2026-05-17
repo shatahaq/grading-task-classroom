@@ -1,0 +1,48 @@
+<?php
+$mahasiswa = [
+    ['nim' => '2301001', 'nama' => 'Andi', 'nilai_tugas' => 90, 'nilai_uts' => 82, 'nilai_uas' => 88],
+    ['nim' => '2301002', 'nama' => 'Budi', 'nilai_tugas' => 75, 'nilai_uts' => 70, 'nilai_uas' => 78],
+    ['nim' => '2301003', 'nama' => 'Citra', 'nilai_tugas' => 65, 'nilai_uts' => 60, 'nilai_uas' => 68],
+    ['nim' => '2301004', 'nama' => 'Dewi', 'nilai_tugas' => 50, 'nilai_uts' => 55, 'nilai_uas' => 52],
+    ['nim' => '2301005', 'nama' => 'Eko', 'nilai_tugas' => 40, 'nilai_uts' => 45, 'nilai_uas' => 42],
+];
+
+function hitungNilaiAkhir($tugas, $uts, $uas)
+{
+    return ($tugas * 0.3) + ($uts * 0.3) + ($uas * 0.4);
+}
+
+function konversiGrade($nilaiAkhir)
+{
+    if ($nilaiAkhir >= 85) {
+        return 'A';
+    } elseif ($nilaiAkhir >= 75) {
+        return 'B';
+    } elseif ($nilaiAkhir >= 65) {
+        return 'C';
+    } elseif ($nilaiAkhir >= 50) {
+        return 'D';
+    }
+
+    return 'E';
+}
+
+echo "<table border='1'>";
+echo "<tr><th>NIM</th><th>Nama</th><th>Tugas</th><th>UTS</th><th>UAS</th><th>Nilai Akhir</th><th>Grade</th></tr>";
+
+foreach ($mahasiswa as $mhs) {
+    $nilaiAkhir = hitungNilaiAkhir($mhs['nilai_tugas'], $mhs['nilai_uts'], $mhs['nilai_uas']);
+    $grade = konversiGrade($nilaiAkhir);
+
+    echo "<tr>";
+    echo "<td>" . htmlspecialchars($mhs['nim']) . "</td>";
+    echo "<td>" . htmlspecialchars($mhs['nama']) . "</td>";
+    echo "<td>{$mhs['nilai_tugas']}</td>";
+    echo "<td>{$mhs['nilai_uts']}</td>";
+    echo "<td>{$mhs['nilai_uas']}</td>";
+    echo "<td>" . number_format($nilaiAkhir, 2) . "</td>";
+    echo "<td>{$grade}</td>";
+    echo "</tr>";
+}
+
+echo "</table>";

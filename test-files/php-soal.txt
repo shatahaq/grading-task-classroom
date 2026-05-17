@@ -1,0 +1,40 @@
+Tugas PHP: Manajemen Nilai Mahasiswa
+
+Instruksi:
+Buat sebuah file PHP bernama `nilai_mahasiswa.php` yang memproses daftar nilai mahasiswa menggunakan array dan fungsi.
+
+Ketentuan program:
+1. Buat array berisi minimal 5 mahasiswa. Setiap mahasiswa memiliki:
+   - nama
+   - nim
+   - nilai_tugas
+   - nilai_uts
+   - nilai_uas
+
+2. Buat fungsi `hitungNilaiAkhir($tugas, $uts, $uas)` dengan bobot:
+   - tugas: 30%
+   - UTS: 30%
+   - UAS: 40%
+
+3. Buat fungsi `konversiGrade($nilaiAkhir)` dengan aturan:
+   - A jika nilai >= 85
+   - B jika nilai >= 75 dan < 85
+   - C jika nilai >= 65 dan < 75
+   - D jika nilai >= 50 dan < 65
+   - E jika nilai < 50
+
+4. Tampilkan hasil dalam bentuk tabel HTML sederhana dengan kolom:
+   - NIM
+   - Nama
+   - Nilai Tugas
+   - Nilai UTS
+   - Nilai UAS
+   - Nilai Akhir
+   - Grade
+
+5. Gunakan perulangan untuk menampilkan semua data mahasiswa.
+
+6. Pastikan kode mudah dibaca, nama variabel jelas, dan tidak mengulang perhitungan yang sama secara tidak perlu.
+
+Output yang diharapkan:
+Halaman HTML menampilkan tabel berisi minimal 5 mahasiswa lengkap dengan nilai akhir dan grade masing-masing.

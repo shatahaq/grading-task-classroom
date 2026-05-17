@@ -1,0 +1,482 @@
+{
+  "name": "AutoGrade AI - Gemini AI Agent Grading",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "autograde-ai",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "WebhookAutoGradeAI",
+      "name": "Webhook - AutoGrade AI",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -1180,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const expected = (typeof $vars !== 'undefined' && $vars.N8N_API_KEY)\n  || (typeof $env !== 'undefined' && $env.N8N_API_KEY)\n  || 'PASTE_LARAVEL_N8N_API_KEY_HERE';\n\nif (!expected || expected === 'PASTE_LARAVEL_N8N_API_KEY_HERE') {\n  throw new Error('Set N8N_API_KEY in n8n Variables, or edit this node and replace PASTE_LARAVEL_N8N_API_KEY_HERE with the value from Laravel .env.');\n}\n\nconst headers = $json.headers ?? {};\nconst provided = headers['x-n8n-api-key'] || headers['X-N8N-API-Key'];\n\nif (provided !== expected) {\n  throw new Error('Invalid N8N API key.');\n}\n\nconst request = $json.body ?? $json;\n\nif (!request.assignment_id) {\n  throw new Error('Missing required field: assignment_id');\n}\n\nif (!request.google_access_token && !request.access_token) {\n  throw new Error('Missing required field: google_access_token');\n}\n\nreturn [{ json: { request, shared_secret: provided } }];"
+      },
+      "id": "ValidateSecret",
+      "name": "Validate Laravel Secret",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -940,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const request = $('Validate Laravel Secret').first().json.request;\nconst assignment = request.assignment ?? {\n  id: request.assignment_id,\n  title: request.title ?? 'AutoGrade AI Assignment',\n  course_id: request.course_id,\n  coursework_id: request.coursework_id,\n  grade_mode: request.grade_mode ?? 'draft',\n  max_score: request.max_score ?? 100,\n  auto_approval: request.auto_approval ?? false,\n  auto_email: request.auto_email ?? false,\n  min_answer_length: request.min_answer_length ?? 30,\n  question_drive_file_id: request.files?.question_drive_file_id ?? '',\n  rubric_drive_file_id: request.files?.rubric_drive_file_id ?? '',\n  answer_key_drive_file_id: request.files?.answer_key_drive_file_id ?? ''\n};\n\nreturn [{\n  json: {\n    access_token: request.google_access_token ?? request.access_token,\n    token_type: request.google_token_type ?? 'Bearer',\n    expires_at: request.google_token_expires_at ?? null,\n    assignment,\n    request\n  }\n}];"
+      },
+      "id": "ExchangeGoogleToken",
+      "name": "Exchange Google Token",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -700,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://classroom.googleapis.com/v1/courses/{{$json.assignment.course_id}}/courseWork/{{$json.assignment.coursework_id}}/studentSubmissions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$json.access_token}}"
+            }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "fields",
+              "value": "studentSubmissions(id,userId,courseWorkId,state,assignmentSubmission,shortAnswerSubmission,multipleChoiceSubmission,creationTime,updateTime),nextPageToken"
+            },
+            {
+              "name": "pageSize",
+              "value": "100"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "GetSubmissions",
+      "name": "Get Classroom Submissions",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -460,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const tokenResponse = $('Exchange Google Token').first().json;\nconst request = $('Validate Laravel Secret').first().json.request;\nconst assignment = tokenResponse.assignment ?? {};\nconst allSubmissions = $json.studentSubmissions ?? [];\n\nconst base = {\n  assignment_id: assignment.id ?? request.assignment_id,\n  course_id: assignment.course_id ?? request.course_id ?? '',\n  coursework_id: assignment.coursework_id ?? request.coursework_id ?? '',\n  assignment_title: assignment.title ?? request.title ?? 'AutoGrade AI Assignment',\n  max_score: Number(assignment.max_score ?? request.max_score ?? 100),\n  auto_approval: Boolean(assignment.auto_approval ?? request.auto_approval ?? false),\n  auto_email: Boolean(assignment.auto_email ?? request.auto_email ?? false),\n  grade_mode: assignment.grade_mode ?? request.grade_mode ?? 'draft',\n  min_answer_length: Number(assignment.min_answer_length ?? request.min_answer_length ?? 30),\n  question_drive_file_id: assignment.question_drive_file_id ?? request.files?.question_drive_file_id ?? '',\n  rubric_drive_file_id: assignment.rubric_drive_file_id ?? request.files?.rubric_drive_file_id ?? '',\n  answer_key_drive_file_id: assignment.answer_key_drive_file_id ?? request.files?.answer_key_drive_file_id ?? ''\n};\n\n/* --- DEBUG: Log raw submission data so we can see exactly what Google returned --- */\nconst debugSubmissions = allSubmissions.map((s) => ({\n  id: s.id,\n  userId: s.userId,\n  state: s.state,\n  hasAssignmentSubmission: Boolean(s.assignmentSubmission),\n  attachmentCount: (s.assignmentSubmission?.attachments ?? []).length,\n  attachmentTypes: (s.assignmentSubmission?.attachments ?? []).map(a => Object.keys(a).join(',')),\n  hasShortAnswer: Boolean(s.shortAnswerSubmission),\n  hasMultipleChoice: Boolean(s.multipleChoiceSubmission),\n  rawKeys: Object.keys(s)\n}));\n\nconsole.log('=== RAW SUBMISSIONS DEBUG ===');\nconsole.log(JSON.stringify(debugSubmissions, null, 2));\nconsole.log('=== Total submissions from API: ' + allSubmissions.length + ' ===');\n\n/* --- Filter: Only grade submissions that have been turned in or returned --- */\nconst submissions = allSubmissions.filter((s) => {\n  const state = String(s.state ?? '').toUpperCase();\n  return state === 'TURNED_IN' || state === 'RETURNED' || state === 'RECLAIMED_BY_STUDENT';\n});\n\nconsole.log('=== After state filter: ' + submissions.length + ' (skipped ' + (allSubmissions.length - submissions.length) + ' with state != TURNED_IN/RETURNED) ===');\n\nfunction answerFromSubmission(submission) {\n  return submission?.shortAnswerSubmission?.answer\n    ?? submission?.multipleChoiceSubmission?.answer\n    ?? '';\n}\n\nfunction attachmentSummary(submission) {\n  /* Support both driveFile and link attachments */\n  const attachments = submission?.assignmentSubmission?.attachments ?? [];\n  return attachments.map((attachment) => {\n    const driveFile = attachment.driveFile ?? {};\n    const link = attachment.link ?? {};\n    const youtubeVideo = attachment.youTubeVideo ?? {};\n    const form = attachment.form ?? {};\n    return {\n      id: driveFile.id ?? '',\n      title: driveFile.title ?? link.title ?? youtubeVideo.title ?? form.title ?? '',\n      alternateLink: driveFile.alternateLink ?? link.url ?? youtubeVideo.alternateLink ?? form.responseUrl ?? '',\n      thumbnailUrl: driveFile.thumbnailUrl ?? link.thumbnailUrl ?? youtubeVideo.thumbnailUrl ?? '',\n      type: driveFile.id ? 'driveFile' : (link.url ? 'link' : (youtubeVideo.id ? 'youtubeVideo' : (form.formUrl ? 'form' : 'unknown')))\n    };\n  });\n}\n\nif (!submissions.length) {\n  const skippedCount = allSubmissions.length - submissions.length;\n  const stateList = allSubmissions.map(s => s.state ?? 'null').join(', ');\n  return [{\n    json: {\n      ...base,\n      student_id: 'no-submission',\n      student_email: '',\n      answer_text: '',\n      answer_attachments: [],\n      answer_attachment_count: 0,\n      submission_state: 'NONE',\n      rubric_text: `Rubric Drive file ID: ${base.rubric_drive_file_id}. Add Drive extraction before this node for production PDF/DOCX grading.`,\n      answer_key_text: `Answer key Drive file ID: ${base.answer_key_drive_file_id}. Add Drive extraction before this node for production PDF/DOCX grading.`,\n      extraction_status: 'FAILED',\n      extracted_text_length: 0,\n      skipped_not_turned_in: skippedCount,\n      _debug_total_submissions: allSubmissions.length,\n      _debug_submission_states: stateList,\n      _debug_raw: debugSubmissions\n    }\n  }];\n}\n\nreturn submissions.map((submission) => {\n  const answer = String(answerFromSubmission(submission) ?? '');\n  const attachments = attachmentSummary(submission);\n  const extractedLength = answer.length;\n  const extractionStatus = answer.trim()\n    ? 'SUCCESS'\n    : (attachments.length ? 'PARTIAL' : 'FAILED');\n\n  return {\n    json: {\n      ...base,\n      student_id: String(submission.userId ?? submission.creatorUserId ?? submission.id ?? 'unknown'),\n      student_email: '',\n      submission_state: String(submission.state ?? 'UNKNOWN').toUpperCase(),\n      answer_text: answer || (attachments.length ? `Submission has ${attachments.length} Drive attachment(s), but text extraction is not configured yet.` : ''),\n      answer_attachments: attachments,\n      answer_attachment_count: attachments.length,\n      rubric_text: `Rubric Drive file ID: ${base.rubric_drive_file_id}. Add Drive extraction before this node for full rubric text.`,\n      answer_key_text: `Answer key Drive file ID: ${base.answer_key_drive_file_id}. Add Drive extraction before this node for full answer key text.`,\n      extraction_status: extractionStatus,\n      extracted_text_length: extractedLength,\n      _debug_raw_submission: {\n        id: submission.id,\n        state: submission.state,\n        rawKeys: Object.keys(submission),\n        assignmentSubmissionKeys: Object.keys(submission.assignmentSubmission ?? {}),\n        attachmentCount: (submission.assignmentSubmission?.attachments ?? []).length\n      }\n    }\n  };\n});"
+      },
+      "id": "BuildGradingItems",
+      "name": "Build Grading Items",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst gradable = items.filter((item) => {\n  const answer = String(item.json.answer_text ?? '').trim();\n  const attachments = Array.isArray(item.json.answer_attachments) ? item.json.answer_attachments : [];\n  const isPlaceholder = answer.startsWith('Submission has ') || answer.startsWith('TODO:');\n\n  return (answer && !isPlaceholder) || attachments.length > 0;\n});\n\nif (gradable.length) {\n  return gradable.map((item) => ({\n    json: {\n      ...item.json,\n      skipped_empty_submissions: items.length - gradable.length\n    }\n  }));\n}\n\nconst fallback = items[0]?.json ?? {};\n\nreturn [{\n  json: {\n    ...fallback,\n    student_id: 'no-submitted-work',\n    student_email: '',\n    answer_text: '',\n    answer_attachments: [],\n    extraction_status: 'FAILED',\n    extracted_text_length: 0,\n    skipped_empty_submissions: items.length,\n    extraction_notes: ['Tidak ada submission yang memiliki jawaban teks atau attachment. Pastikan siswa menambahkan file di Your work lalu klik Turn in.']\n  }\n}];"
+      },
+      "id": "KeepSubmittedWork",
+      "name": "Keep Submitted Work",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        20,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://classroom.googleapis.com/v1/userProfiles/{{$json.student_id}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$('Exchange Google Token').first().json.access_token}}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "GetStudentProfile",
+      "name": "Get Student Profile",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        260,
+        0
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const accessToken = $('Exchange Google Token').first().json.access_token;\nconst original = $('Build Grading Items').item.json;\nconst profile = $json ?? {};\nconst profileName = profile.name ?? {};\n\nlet studentEmail = String(profile.emailAddress ?? '').trim();\nlet studentName = String(profileName.fullName ?? profileName.givenName ?? '').trim();\n\n/* Fallback: if userProfiles didn't return email, try course roster */\nif (!studentEmail && original.course_id && original.student_id) {\n  try {\n    const rosterUrl = `https://classroom.googleapis.com/v1/courses/${encodeURIComponent(original.course_id)}/students`;\n    const rosterResponse = await this.helpers.httpRequest({\n      method: 'GET',\n      url: rosterUrl,\n      headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' },\n      json: true,\n      timeout: 30000\n    });\n    const students = rosterResponse.students ?? [];\n    const match = students.find(s => s.userId === original.student_id);\n    if (match) {\n      studentEmail = String(match.profile?.emailAddress ?? '').trim();\n      if (!studentName) studentName = String(match.profile?.name?.fullName ?? '').trim();\n    }\n  } catch (err) {\n    console.log('Roster fallback failed:', err?.message ?? err);\n  }\n}\n\nreturn [{\n  json: {\n    ...original,\n    student_email: studentEmail || original.student_email || '',\n    student_name: studentName || original.student_name || ''\n  }\n}];"
+      },
+      "id": "AttachStudentProfile",
+      "name": "Attach Student Profile",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        500,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const accessToken = $('Exchange Google Token').first().json.access_token;\nconst output = [];\n\nfunction toText(value) {\n  if (Buffer.isBuffer(value)) {\n    return value.toString('utf8');\n  }\n\n  if (typeof value === 'string') {\n    return value;\n  }\n\n  if (value && typeof value === 'object') {\n    return JSON.stringify(value, null, 2);\n  }\n\n  return '';\n}\n\nfunction canDownloadAsText(name, mimeType) {\n  return mimeType.startsWith('text/')\n    || ['application/json', 'application/xml', 'application/javascript', 'application/x-php', 'application/octet-stream'].includes(mimeType)\n    || /\\.(txt|php|md|json|js|html|css|xml)$/i.test(name);\n}\n\nasync function readAttachment(attachment) {\n  const fileId = attachment.id;\n\n  if (!fileId) {\n    return { text: '', note: 'Attachment tanpa file ID.' };\n  }\n\n  const metadata = await this.helpers.httpRequest({\n    method: 'GET',\n    url: `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?fields=id,name,mimeType`,\n    headers: {\n      Authorization: `Bearer ${accessToken}`,\n      Accept: 'application/json'\n    },\n    json: true,\n    timeout: 30000\n  });\n\n  const name = String(metadata.name ?? attachment.title ?? fileId);\n  const mimeType = String(metadata.mimeType ?? '');\n  let url = null;\n\n  if (mimeType === 'application/vnd.google-apps.document') {\n    url = `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}/export?mimeType=text/plain`;\n  } else if (canDownloadAsText(name, mimeType)) {\n    url = `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?alt=media`;\n  } else {\n    return {\n      text: '',\n      note: `${name} (${mimeType || 'unknown MIME'}) belum bisa diekstrak oleh template ini. Gunakan TXT/PHP/Google Docs untuk testing.`\n    };\n  }\n\n  const content = await this.helpers.httpRequest({\n    method: 'GET',\n    url,\n    headers: {\n      Authorization: `Bearer ${accessToken}`\n    },\n    json: false,\n    encoding: null,\n    timeout: 30000\n  });\n\n  const text = toText(content).trim();\n\n  if (!text) {\n    return { text: '', note: `${name} berhasil diunduh tetapi teksnya kosong.` };\n  }\n\n  return {\n    text: `--- Attachment: ${name} (${mimeType || 'unknown MIME'}) ---\\n${text}`,\n    note: ''\n  };\n}\n\nfor (const item of $input.all()) {\n  const result = { ...item.json };\n  const attachments = Array.isArray(result.answer_attachments) ? result.answer_attachments : [];\n  const currentText = String(result.answer_text ?? '').trim();\n  const isPlaceholder = currentText.startsWith('Submission has ') || currentText.startsWith('TODO:');\n  const texts = [];\n  const notes = [];\n\n  if (currentText && !isPlaceholder) {\n    texts.push(currentText);\n  }\n\n  if (!texts.length && attachments.length) {\n    for (const attachment of attachments) {\n      try {\n        const extracted = await readAttachment.call(this, attachment);\n\n        if (extracted.text) {\n          texts.push(extracted.text);\n        }\n\n        if (extracted.note) {\n          notes.push(extracted.note);\n        }\n      } catch (error) {\n        notes.push(`Gagal membaca attachment ${attachment.title || attachment.id || ''}: ${error?.message ?? error}`);\n      }\n    }\n  }\n\n  result.answer_text = texts.join('\\n\\n').trim();\n  result.extracted_text_length = result.answer_text.length;\n\n  if (result.extracted_text_length > 0) {\n    result.extraction_status = 'SUCCESS';\n  } else if (attachments.length > 0 || notes.length > 0) {\n    result.extraction_status = 'PARTIAL';\n  } else {\n    result.extraction_status = 'FAILED';\n  }\n\n  result.extraction_notes = notes;\n\n  output.push({ json: result });\n}\n\nreturn output;"
+      },
+      "id": "ExtractStudentAnswerText",
+      "name": "Extract Student Answer Text",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        740,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const accessToken = $('Exchange Google Token').first().json.access_token;\nconst output = [];\n\nfunction toText(value) {\n  if (Buffer.isBuffer(value)) return value.toString('utf8');\n  if (typeof value === 'string') return value;\n  if (value && typeof value === 'object') return JSON.stringify(value, null, 2);\n  return '';\n}\n\nfunction canDownloadAsText(name, mimeType) {\n  return mimeType.startsWith('text/')\n    || ['application/json', 'application/xml', 'application/javascript', 'application/x-php', 'application/octet-stream'].includes(mimeType)\n    || /\\.(txt|php|md|json|js|html|css|xml)$/i.test(name);\n}\n\nconst GOOGLE_EXPORT = { 'application/vnd.google-apps.document': 'text/plain', 'application/vnd.google-apps.spreadsheet': 'text/csv', 'application/vnd.google-apps.presentation': 'text/plain' };\nconst BINARY_DOCS = ['application/pdf','application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/rtf'];\n\nasync function readDriveText(fileId, label) {\n  if (!fileId) return { text: '', note: `${label} tidak punya file ID.` };\n  let metadata;\n  try {\n    metadata = await this.helpers.httpRequest({ method: 'GET', url: `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?fields=id,name,mimeType`, headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' }, json: true, timeout: 30000 });\n  } catch (err) { return { text: '', note: `${label} gagal ambil metadata: ${err?.message ?? err}` }; }\n  const name = String(metadata.name ?? fileId);\n  const mimeType = String(metadata.mimeType ?? '');\n  let url = null;\n\n  if (GOOGLE_EXPORT[mimeType]) {\n    url = `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}/export?mimeType=${encodeURIComponent(GOOGLE_EXPORT[mimeType])}`;\n  } else if (canDownloadAsText(name, mimeType)) {\n    url = `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?alt=media`;\n  } else if (BINARY_DOCS.includes(mimeType)) {\n    try {\n      const copy = await this.helpers.httpRequest({ method: 'POST', url: `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}/copy`, headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ name: `_temp_${name}`, mimeType: 'application/vnd.google-apps.document' }), json: true, timeout: 30000 });\n      if (!copy.id) return { text: '', note: `${label} ${name}: OCR copy gagal.` };\n      const content = await this.helpers.httpRequest({ method: 'GET', url: `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(copy.id)}/export?mimeType=text/plain`, headers: { Authorization: `Bearer ${accessToken}` }, json: false, encoding: null, timeout: 30000 });\n      try { await this.helpers.httpRequest({ method: 'DELETE', url: `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(copy.id)}`, headers: { Authorization: `Bearer ${accessToken}` }, timeout: 15000 }); } catch {}\n      const text = toText(content).trim();\n      return text ? { text: `--- ${label}: ${name} ---\\n${text}`, note: '' } : { text: '', note: `${label} ${name}: OCR kosong.` };\n    } catch (e) {\n      url = `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?alt=media`;\n    }\n  } else {\n    return { text: '', note: `${label} ${name} (${mimeType}) tidak didukung. Gunakan TXT, PDF, DOCX, atau Google Docs.` };\n  }\n\n  const content = await this.helpers.httpRequest({ method: 'GET', url, headers: { Authorization: `Bearer ${accessToken}` }, json: false, encoding: null, timeout: 30000 });\n  const text = toText(content).trim();\n  return text ? { text: `--- ${label}: ${name} ---\\n${text}`, note: '' } : { text: '', note: `${label} ${name} kosong setelah diunduh.` };\n}\n\nfor (const item of $input.all()) {\n  const result = { ...item.json };\n  const notes = Array.isArray(result.extraction_notes) ? [...result.extraction_notes] : [];\n\n  try {\n    const rubric = await readDriveText.call(this, result.rubric_drive_file_id, 'Rubrik');\n    if (rubric.text) result.rubric_text = rubric.text;\n    if (rubric.note) notes.push(rubric.note);\n  } catch (error) { notes.push(`Gagal membaca Rubrik: ${error?.message ?? error}`); }\n\n  try {\n    const answerKey = await readDriveText.call(this, result.answer_key_drive_file_id, 'Kunci Jawaban');\n    if (answerKey.text) result.answer_key_text = answerKey.text;\n    if (answerKey.note) notes.push(answerKey.note);\n  } catch (error) { notes.push(`Gagal membaca Kunci Jawaban: ${error?.message ?? error}`); }\n\n  try {\n    const question = await readDriveText.call(this, result.question_drive_file_id, 'Soal');\n    if (question.text) result.question_text = question.text;\n    if (question.note) notes.push(question.note);\n  } catch (error) { notes.push(`Gagal membaca Soal: ${error?.message ?? error}`); }\n\n  const rubricText = String(result.rubric_text ?? '');\n  const answerKeyText = String(result.answer_key_text ?? '');\n  const questionText = String(result.question_text ?? '');\n  result.rubric_text_available = rubricText.length > 10 && !rubricText.startsWith('Rubric Drive file ID:');\n  result.answer_key_text_available = answerKeyText.length > 10 && !answerKeyText.startsWith('Answer key Drive file ID:');\n  result.question_text_available = questionText.length > 10;\n  result.extraction_notes = notes;\n\n  output.push({ json: result });\n}\n\nreturn output;"
+      },
+      "id": "ExtractGradingContextText",
+      "name": "Extract Rubric and Answer Key Text",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        980,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ `Nilai satu submission mahasiswa berdasarkan data berikut. Kembalikan HANYA object JSON valid, tanpa markdown, tanpa code fence, dan tanpa teks tambahan.\\n\\nSchema JSON wajib:\\n{\\n  \"student_id\": \"string\",\\n  \"student_email\": \"string\",\\n  \"score\": 0,\\n  \"max_score\": ${$json.max_score},\\n  \"confidence\": \"LOW|MEDIUM|HIGH\",\\n  \"needs_review\": true,\\n  \"extraction_status\": \"SUCCESS|PARTIAL|FAILED\",\\n  \"extracted_text_length\": 0,\\n  \"output_json_valid\": true,\\n  \"reason\": \"string\",\\n  \"feedback_email\": \"string\",\\n  \"rubric_breakdown\": [],\\n  \"email_sent\": false\\n}\\n\\nAssignment ID: ${$json.assignment_id}\\nJudul: ${$json.assignment_title}\\nStudent ID: ${$json.student_id}\\nStudent Name: ${$json.student_name}\\nStudent Email: ${$json.student_email}\\nMax Score: ${$json.max_score}\\nGrade Mode: ${$json.grade_mode}\\nAuto Approval: ${$json.auto_approval}\\nAuto Email: ${$json.auto_email}\\nMinimum Answer Length: ${$json.min_answer_length}\\nExtraction Status: ${$json.extraction_status}\\nExtracted Text Length: ${$json.extracted_text_length}\\nAnswer Attachment Count: ${$json.answer_attachment_count ?? 0}\\nRubric Available: ${$json.rubric_text_available}\\nAnswer Key Available: ${$json.answer_key_text_available}\\nQuestion Available: ${$json.question_text_available ?? false}\\nExtraction Notes JSON: ${JSON.stringify($json.extraction_notes ?? [])}\\n\\nSoal/Pertanyaan Tugas:\\n${$json.question_text ?? 'Soal tidak tersedia.'}\\n\\nRubrik Penilaian (WAJIB diikuti persis):\\n${$json.rubric_text}\\n\\nKunci Jawaban:\\n${$json.answer_key_text}\\n\\nJawaban Mahasiswa:\\n${$json.answer_text}\\n\\nAttachment Summary JSON:\\n${JSON.stringify($json.answer_attachments ?? [])}` }}",
+        "options": {
+          "systemMessage": "Anda adalah AI grading assistant untuk dosen. ATURAN MUTLAK: 1) Output HARUS berupa SATU object JSON valid — tanpa markdown, tanpa code fence, tanpa backtick, tanpa teks sebelum/sesudah JSON. 2) Gunakan RUBRIK YANG DISEDIAKAN sebagai acuan penilaian. rubric_breakdown HARUS mengikuti rubric_point yang ada di rubrik, BUKAN rubrik karangan sendiri. 3) score HARUS menggunakan skala max_score yang diberikan. Jangan pakai skala sendiri. Jika max_score=100 maka score 0-100. 4) Jika rubrik punya 6 poin, rubric_breakdown juga HARUS punya 6 item yang sesuai. 5) Nilai berdasarkan rubrik, kunci jawaban, soal, dan jawaban mahasiswa yang diberikan. Jangan mengarang fakta. 6) Jika extraction_status bukan SUCCESS, set needs_review true dan confidence LOW/MEDIUM. 7) rubric_breakdown harus array of {rubric_point, score, max_score, feedback}. 8) Feedback email dalam bahasa Indonesia, sopan, spesifik, maksimal 4 kalimat, tidak menyebut sistem internal. 9) Response dimulai dengan { dan diakhiri dengan }.",
+          "maxIterations": 2,
+          "returnIntermediateSteps": false
+        }
+      },
+      "id": "AIAgentGrading",
+      "name": "AI Grading Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        1220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-2.5-flash",
+        "options": {
+          "temperature": 0.1,
+          "maxOutputTokens": 8192
+        }
+      },
+      "id": "GoogleGeminiChatModel",
+      "name": "Google Gemini Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        1070,
+        260
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const original = $('Extract Rubric and Answer Key Text').item.json;\nlet raw = $json.output ?? $json.text ?? $json.response ?? $json;\nlet parsed = null;\nlet valid = false;\n\nfunction tryParse(str) { try { return JSON.parse(str); } catch { return null; } }\n\nfunction extractJson(input) {\n  if (!input) return null;\n  if (typeof input === 'object' && !Array.isArray(input)) return input;\n  const text = String(input);\n  let result = tryParse(text);\n  if (result && typeof result === 'object') return result;\n  const fenceMatch = text.match(/```(?:json)?\\s*\\n?([\\s\\S]*?)\\n?\\s*```/i);\n  if (fenceMatch) { result = tryParse(fenceMatch[1].trim()); if (result && typeof result === 'object') return result; }\n  const fb = text.indexOf('{'); const lb = text.lastIndexOf('}');\n  if (fb !== -1 && lb > fb) { result = tryParse(text.substring(fb, lb + 1)); if (result && typeof result === 'object') return result; }\n  const lines = text.split('\\n'); let js = -1;\n  for (let i = 0; i < lines.length; i++) { if (lines[i].trim().startsWith('{')) { js = i; break; } }\n  if (js >= 0) { const c = lines.slice(js).join('\\n').trim(); const l = c.lastIndexOf('}'); if (l > 0) { result = tryParse(c.substring(0, l + 1)); if (result && typeof result === 'object') return result; } }\n  return null;\n}\n\nparsed = extractJson(raw);\nif (parsed && typeof parsed.output === 'object' && !Array.isArray(parsed.output)) parsed = parsed.output;\nif (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) { valid = true; } else { valid = false; parsed = {}; }\n\n/* Score scaling */\nconst assignmentMaxScore = Number(original.max_score ?? 100);\nconst aiMaxScore = Number(parsed.max_score ?? parsed.total_score !== undefined ? (Number(parsed.max_total_score ?? parsed.max_score ?? assignmentMaxScore)) : assignmentMaxScore);\nconst aiRawScore = Number(parsed.score ?? parsed.total_score ?? parsed.score_ai ?? 0);\nlet score = 0;\nif (Number.isFinite(aiRawScore) && aiMaxScore > 0) {\n  score = (aiMaxScore !== assignmentMaxScore) ? Math.round((aiRawScore / aiMaxScore) * assignmentMaxScore * 100) / 100 : aiRawScore;\n  score = Math.min(Math.max(score, 0), assignmentMaxScore);\n}\nlet rubricBreakdown = Array.isArray(parsed.rubric_breakdown) ? parsed.rubric_breakdown : [];\nif (aiMaxScore !== assignmentMaxScore && rubricBreakdown.length > 0) {\n  const sf = assignmentMaxScore / aiMaxScore;\n  rubricBreakdown = rubricBreakdown.map(item => ({ ...item, score: Math.round(Number(item.score ?? 0) * sf * 100) / 100, max_score: Math.round(Number(item.max_score ?? 0) * sf * 100) / 100 }));\n}\n\nconst confidence = String(parsed.confidence ?? 'LOW').toUpperCase();\nconst extractionStatus = String(parsed.extraction_status ?? original.extraction_status ?? 'PARTIAL').toUpperCase();\nconst extractedLength = Number(parsed.extracted_text_length ?? original.extracted_text_length ?? 0);\nconst notes = Array.isArray(original.extraction_notes) ? original.extraction_notes.filter(Boolean) : [];\nconst reasonParts = [String(parsed.reason ?? (valid ? '' : 'Output AI Agent tidak valid JSON.'))];\nif (aiMaxScore !== assignmentMaxScore && valid) reasonParts.push(`Skor di-scale dari ${aiRawScore}/${aiMaxScore} ke ${score}/${assignmentMaxScore}.`);\nif (notes.length && extractionStatus !== 'SUCCESS') reasonParts.push(`Catatan ekstraksi: ${notes.join(' | ')}`);\n\nreturn [{ json: {\n  assignment_id: original.assignment_id,\n  assignment_title: String(original.assignment_title ?? 'AutoGrade AI Assignment'),\n  student_id: String(parsed.student_id ?? original.student_id ?? 'unknown'),\n  student_name: String(original.student_name ?? ''),\n  student_email: String(parsed.student_email ?? original.student_email ?? ''),\n  score,\n  confidence: ['LOW','MEDIUM','HIGH'].includes(confidence) ? confidence : 'LOW',\n  needs_review: Boolean(parsed.needs_review ?? confidence !== 'HIGH'),\n  extraction_status: ['SUCCESS','PARTIAL','FAILED'].includes(extractionStatus) ? extractionStatus : 'PARTIAL',\n  extracted_text_length: Number.isFinite(extractedLength) ? extractedLength : 0,\n  output_json_valid: valid && Boolean(parsed.output_json_valid ?? true),\n  reason: reasonParts.filter(Boolean).join(' '),\n  feedback_email: String(parsed.feedback_email ?? ''),\n  rubric_breakdown: rubricBreakdown,\n  email_sent: false,\n  max_score: assignmentMaxScore,\n  auto_approval: Boolean(original.auto_approval),\n  auto_email: Boolean(original.auto_email),\n  min_answer_length: Number(original.min_answer_length ?? 30),\n  extraction_notes: notes,\n  answer_attachment_count: Number(original.answer_attachment_count ?? 0),\n  skipped_empty_submissions: Number(original.skipped_empty_submissions ?? 0),\n  workflow_version: 'v3-soal-rubric-scaling',\n  rubric_text_available: Boolean(original.rubric_text_available),\n  answer_key_text_available: Boolean(original.answer_key_text_available),\n  question_text_available: Boolean(original.question_text_available)\n}}];"
+      },
+      "id": "NormalizeAgentOutput",
+      "name": "Normalize Agent Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1460,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const result = $json;\nconst score = Number(result.score);\nconst maxScore = Number(result.max_score ?? 100);\nconst extractedLength = Number(result.extracted_text_length ?? 0);\n\nconst canApprove = Boolean(result.auto_approval)\n  && result.confidence === 'HIGH'\n  && !result.needs_review\n  && Number.isFinite(score)\n  && score >= 0\n  && score <= maxScore\n  && result.extraction_status === 'SUCCESS'\n  && extractedLength >= Number(result.min_answer_length ?? 30)\n  && Boolean(result.output_json_valid);\n\nconst status = result.extraction_status === 'FAILED'\n  ? 'FAILED'\n  : (canApprove ? 'APPROVED' : 'REVIEW');\n\nconst emailShouldSend = status === 'APPROVED'\n  && Boolean(result.auto_email)\n  && Boolean(String(result.student_email ?? '').trim())\n  && Boolean(String(result.feedback_email ?? '').trim());\n\nreturn [{\n  json: {\n    assignment_id: result.assignment_id,\n    assignment_title: result.assignment_title,\n    student_id: result.student_id,\n    student_name: result.student_name,\n    student_email: result.student_email,\n    score: result.score,\n    score_ai: result.score,\n    max_score: maxScore,\n    confidence: result.confidence,\n    needs_review: result.needs_review,\n    status,\n    extraction_status: result.extraction_status,\n    extracted_text_length: result.extracted_text_length,\n    output_json_valid: result.output_json_valid,\n    reason: result.reason,\n    feedback_email: result.feedback_email,\n    rubric_breakdown: result.rubric_breakdown,\n    auto_email: Boolean(result.auto_email),\n    email_should_send: emailShouldSend,\n    email_sent: false,\n    gmail_message_id: null,\n    extraction_notes: result.extraction_notes ?? [],\n    answer_attachment_count: result.answer_attachment_count ?? 0,\n    skipped_empty_submissions: Number(result.skipped_empty_submissions ?? 0),\n    workflow_version: result.workflow_version ?? 'submitted-work-filter-v2',\n    rubric_text_available: Boolean(result.rubric_text_available),\n    answer_key_text_available: Boolean(result.answer_key_text_available)\n  }\n}];"
+      },
+      "id": "ApplyDecision",
+      "name": "Apply AutoGrade Decision",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1700,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const accessToken = $('Exchange Google Token').first().json.access_token;\nconst output = [];\n\nfunction base64Url(value) {\n  return Buffer.from(value, 'utf8')\n    .toString('base64')\n    .replace(/\\+/g, '-')\n    .replace(/\\//g, '_')\n    .replace(/=+$/g, '');\n}\n\nfunction encodedSubject(value) {\n  return `=?UTF-8?B?${Buffer.from(value, 'utf8').toString('base64')}?=`;\n}\n\nfunction mimeMessage(result) {\n  const studentName = String(result.student_name || '').trim();\n  const greeting = studentName ? `Halo ${studentName},` : 'Halo,';\n  const subject = `Hasil Penilaian: ${result.assignment_title || 'Tugas'}`;\n  const scoreLine = `Skor: ${result.score}/${result.max_score}`;\n  const body = [\n    greeting,\n    '',\n    `Berikut hasil penilaian untuk ${result.assignment_title || 'tugas Anda'}.`,\n    scoreLine,\n    '',\n    result.feedback_email || result.reason || 'Feedback belum tersedia.',\n    '',\n    'Terima kasih.'\n  ].join('\\n');\n\n  return [\n    `To: ${result.student_email}`,\n    `Subject: ${encodedSubject(subject)}`,\n    'MIME-Version: 1.0',\n    'Content-Type: text/plain; charset=UTF-8',\n    'Content-Transfer-Encoding: 8bit',\n    '',\n    body\n  ].join('\\r\\n');\n}\n\nfor (const item of $input.all()) {\n  const result = { ...item.json };\n  result.email_sent = false;\n\n  if (!result.email_should_send) {\n    output.push({ json: result });\n    continue;\n  }\n\n  try {\n    const response = await this.helpers.httpRequest({\n      method: 'POST',\n      url: 'https://gmail.googleapis.com/gmail/v1/users/me/messages/send',\n      headers: {\n        Authorization: `Bearer ${accessToken}`,\n        'Content-Type': 'application/json'\n      },\n      body: {\n        raw: base64Url(mimeMessage(result))\n      },\n      json: true,\n      timeout: 30000\n    });\n\n    result.email_sent = Boolean(response?.id);\n    result.gmail_message_id = response?.id ?? null;\n\n    if (!result.email_sent) {\n      result.reason = [result.reason, 'Gmail API tidak mengembalikan message id.'].filter(Boolean).join(' ');\n    }\n  } catch (error) {\n    result.email_sent = false;\n    result.email_error = String(error?.message ?? error);\n    result.reason = [result.reason, `Email gagal dikirim: ${result.email_error}`].filter(Boolean).join(' ');\n  }\n\n  output.push({ json: result });\n}\n\nreturn output;"
+      },
+      "id": "SendFeedbackEmail",
+      "name": "Send Feedback Email - Gmail API",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1940,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{\n  json: {\n    results: $input.all().map((item) => item.json)\n  }\n}];"
+      },
+      "id": "AggregateResults",
+      "name": "Aggregate Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2180,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{$json}}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "RespondToLaravel",
+      "name": "Respond to Laravel",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2420,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook - AutoGrade AI": {
+      "main": [
+        [
+          {
+            "node": "Validate Laravel Secret",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Laravel Secret": {
+      "main": [
+        [
+          {
+            "node": "Exchange Google Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Exchange Google Token": {
+      "main": [
+        [
+          {
+            "node": "Get Classroom Submissions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Classroom Submissions": {
+      "main": [
+        [
+          {
+            "node": "Build Grading Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Grading Items": {
+      "main": [
+        [
+          {
+            "node": "Keep Submitted Work",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Keep Submitted Work": {
+      "main": [
+        [
+          {
+            "node": "Get Student Profile",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Student Profile": {
+      "main": [
+        [
+          {
+            "node": "Attach Student Profile",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Attach Student Profile": {
+      "main": [
+        [
+          {
+            "node": "Extract Student Answer Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Student Answer Text": {
+      "main": [
+        [
+          {
+            "node": "Extract Rubric and Answer Key Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Rubric and Answer Key Text": {
+      "main": [
+        [
+          {
+            "node": "AI Grading Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Grading Agent": {
+      "main": [
+        [
+          {
+            "node": "Normalize Agent Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Grading Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Agent Output": {
+      "main": [
+        [
+          {
+            "node": "Apply AutoGrade Decision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apply AutoGrade Decision": {
+      "main": [
+        [
+          {
+            "node": "Send Feedback Email - Gmail API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Feedback Email - Gmail API": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Results": {
+      "main": [
+        [
+          {
+            "node": "Respond to Laravel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2026-05-17T00:00:00.000Z",
+  "versionId": "autograde-ai-agent-template"
+}

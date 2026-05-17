@@ -1,0 +1,42 @@
+Rubrik Penilaian Tugas PHP: Manajemen Nilai Mahasiswa
+
+Total nilai: 100 poin
+
+1. Struktur data mahasiswa - 20 poin
+- 20: Menggunakan array berisi minimal 5 mahasiswa, setiap mahasiswa memiliki nama, nim, nilai_tugas, nilai_uts, dan nilai_uas.
+- 15: Data mahasiswa ada, tetapi salah satu field kurang konsisten atau jumlah mahasiswa kurang dari 5.
+- 10: Menggunakan array, tetapi struktur data kurang tepat.
+- 0: Tidak menggunakan struktur data mahasiswa yang jelas.
+
+2. Fungsi hitungNilaiAkhir - 20 poin
+- 20: Fungsi menerima nilai tugas, UTS, dan UAS, lalu menghitung bobot 30%, 30%, 40% dengan benar.
+- 15: Fungsi ada dan hampir benar, tetapi ada kesalahan kecil pada bobot atau parameter.
+- 10: Perhitungan nilai akhir ada, tetapi tidak dibuat sebagai fungsi.
+- 0: Tidak ada perhitungan nilai akhir yang sesuai.
+
+3. Fungsi konversiGrade - 20 poin
+- 20: Fungsi konversi grade benar untuk A, B, C, D, dan E sesuai batas nilai.
+- 15: Fungsi ada, tetapi ada satu batas nilai yang kurang tepat.
+- 10: Grade ditentukan, tetapi logika if/elseif kurang lengkap.
+- 0: Tidak ada konversi grade.
+
+4. Tampilan tabel HTML - 20 poin
+- 20: Menampilkan tabel HTML dengan semua kolom yang diminta dan data setiap mahasiswa.
+- 15: Tabel tampil, tetapi ada satu atau dua kolom yang kurang.
+- 10: Data tampil, tetapi bukan dalam tabel yang rapi.
+- 0: Output tidak menampilkan data mahasiswa dengan jelas.
+
+5. Penggunaan perulangan dan kerapian kode - 10 poin
+- 10: Menggunakan perulangan, nama variabel jelas, dan kode mudah dibaca.
+- 5: Menggunakan perulangan tetapi kode kurang rapi atau ada banyak pengulangan tidak perlu.
+- 0: Tidak menggunakan perulangan atau kode sulit dipahami.
+
+6. Ketepatan sintaks PHP dan eksekusi - 10 poin
+- 10: Kode dapat dijalankan tanpa error sintaks.
+- 5: Ada error kecil yang mudah diperbaiki.
+- 0: Kode tidak dapat dijalankan karena error sintaks besar.
+
+Catatan penilaian:
+- Jika jawaban tidak relevan dengan PHP, nilai maksimal 20.
+- Jika jawaban hanya berupa penjelasan tanpa kode, nilai maksimal 30.
+- Jika kode tidak bisa dijalankan tetapi konsep utama benar, nilai maksimal 70.

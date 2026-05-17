@@ -1,0 +1,79 @@
+Kunci Jawaban Referensi Tugas PHP
+
+Contoh solusi:
+
+```php
+<?php
+$mahasiswa = [
+    [
+        'nim' => '2301001',
+        'nama' => 'Andi',
+        'nilai_tugas' => 90,
+        'nilai_uts' => 82,
+        'nilai_uas' => 88,
+    ],
+    [
+        'nim' => '2301002',
+        'nama' => 'Budi',
+        'nilai_tugas' => 75,
+        'nilai_uts' => 70,
+        'nilai_uas' => 78,
+    ],
+    [
+        'nim' => '2301003',
+        'nama' => 'Citra',
+        'nilai_tugas' => 65,
+        'nilai_uts' => 60,
+        'nilai_uas' => 68,
+    ],
+    [
+        'nim' => '2301004',
+        'nama' => 'Dewi',
+        'nilai_tugas' => 50,
+        'nilai_uts' => 55,
+        'nilai_uas' => 52,
+    ],
+    [
+        'nim' => '2301005',
+        'nama' => 'Eko',
+        'nilai_tugas' => 40,
+        'nilai_uts' => 45,
+        'nilai_uas' => 42,
+    ],
+];
+
+function hitungNilaiAkhir($tugas, $uts, $uas)
+{
+    return ($tugas * 0.3) + ($uts * 0.3) + ($uas * 0.4);
+}
+
+function konversiGrade($nilaiAkhir)
+{
+    if ($nilaiAkhir >= 85) {
+        return 'A';
+    }
+
+    if ($nilaiAkhir >= 75) {
+        return 'B';
+    }
+
+    if ($nilaiAkhir >= 65) {
+        return 'C';
+    }
+
+    if ($nilaiAkhir >= 50) {
+        return 'D';
+    }
+
+    return 'E';
+}
+?>
+```
+
+Penjelasan:
+- Array `$mahasiswa` menyimpan data minimal 5 mahasiswa.
+- Fungsi `hitungNilaiAkhir` menghitung nilai akhir berdasarkan bobot tugas 30%, UTS 30%, dan UAS 40%.
+- Fungsi `konversiGrade` menentukan grade berdasarkan nilai akhir.
+- Perulangan `foreach` digunakan untuk menampilkan seluruh data mahasiswa.
+- Output akhir yang benar adalah tabel HTML sederhana dengan kolom NIM, Nama, Nilai Tugas, Nilai UTS, Nilai UAS, Nilai Akhir, dan Grade.
+- Pada implementasi lengkap, data teks seperti NIM dan nama sebaiknya diamankan dengan `htmlspecialchars` sebelum ditampilkan ke halaman.

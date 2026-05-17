@@ -28,6 +28,30 @@ return [
         'key' => env('RESEND_KEY'),
     ],
 
+    'google' => [
+        'client_id' => env('GOOGLE_CLIENT_ID'),
+        'client_secret' => env('GOOGLE_CLIENT_SECRET'),
+        'redirect' => env('GOOGLE_REDIRECT_URI', rtrim((string) env('APP_URL', 'http://127.0.0.1:8000'), '/').'/auth/google/callback'),
+        'scopes' => [
+            'openid',
+            'profile',
+            'email',
+            'https://www.googleapis.com/auth/classroom.courses.readonly',
+            'https://www.googleapis.com/auth/classroom.coursework.students',
+            'https://www.googleapis.com/auth/classroom.student-submissions.students.readonly',
+            'https://www.googleapis.com/auth/classroom.rosters.readonly',
+            'https://www.googleapis.com/auth/classroom.profile.emails',
+            'https://www.googleapis.com/auth/drive.file',
+            'https://www.googleapis.com/auth/drive.readonly',
+            'https://www.googleapis.com/auth/gmail.send',
+        ],
+    ],
+
+    'n8n' => [
+        'webhook_url' => env('N8N_WEBHOOK_URL'),
+        'api_key' => env('N8N_API_KEY'),
+    ],
+
     'slack' => [
         'notifications' => [
             'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),
