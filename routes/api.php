@@ -1,7 +1,6 @@
 <?php
 
-use App\Http\Controllers\N8nTokenController;
-use Illuminate\Support\Facades\Route;
+declare(strict_types=1);
 
-Route::post('/n8n/google-access-token', [N8nTokenController::class, 'show'])
-    ->name('api.n8n.google-access-token');
+// API routes are registered in routes/web.php because the native front
+// controller uses one explicit route table.

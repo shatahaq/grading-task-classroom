@@ -1,40 +1,31 @@
 <?php
 
-use App\Http\Controllers\AssignmentController;
-use App\Http\Controllers\AuthController;
-use App\Http\Controllers\CourseController;
-use App\Http\Controllers\DashboardController;
-use App\Http\Controllers\GradingController;
-use Illuminate\Support\Facades\Route;
+declare(strict_types=1);
 
-Route::get('/', function () {
-    if (auth()->check()) {
-        return redirect()->route('dashboard');
-    }
+use App\Controllers\AssignmentController;
+use App\Controllers\AuthController;
+use App\Controllers\CourseController;
+use App\Controllers\DashboardController;
+use App\Controllers\GradingController;
+use App\Controllers\N8nTokenController;
 
-    return view('welcome');
-})->name('home');
+$router->get('home', '/', [AuthController::class, 'welcome']);
+$router->get('login', '/login', [AuthController::class, 'redirect'], ['guest']);
+$router->get('auth.google.redirect', '/auth/google', [AuthController::class, 'redirect'], ['guest']);
+$router->get('auth.google.callback', '/auth/google/callback', [AuthController::class, 'callback'], ['guest']);
 
-Route::get('/login', [AuthController::class, 'redirect'])->name('login');
-Route::get('/auth/google', [AuthController::class, 'redirect'])->name('auth.google.redirect');
-Route::get('/auth/google/callback', [AuthController::class, 'callback'])->name('auth.google.callback');
+$router->post('logout', '/logout', [AuthController::class, 'logout'], ['auth', 'csrf']);
+$router->post('auth.google.disconnect', '/auth/google/disconnect', [AuthController::class, 'disconnect'], ['auth', 'csrf']);
 
-Route::middleware('auth')->group(function () {
-    Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
-    Route::post('/auth/google/disconnect', [AuthController::class, 'disconnect'])->name('auth.google.disconnect');
+$router->get('dashboard', '/dashboard', [DashboardController::class, 'index'], ['auth']);
+$router->get('courses.index', '/courses', [CourseController::class, 'index'], ['auth']);
+$router->get('courses.show', '/courses/{courseId}', [CourseController::class, 'show'], ['auth']);
+$router->get('courses.coursework', '/courses/{courseId}/coursework', [CourseController::class, 'coursework'], ['auth']);
 
-    Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
-    Route::get('/courses', [CourseController::class, 'index'])->name('courses.index');
-    Route::get('/courses/{courseId}', [CourseController::class, 'show'])
-        ->where('courseId', '[A-Za-z0-9._-]+')
-        ->name('courses.show');
-    Route::get('/courses/{courseId}/coursework', [CourseController::class, 'coursework'])
-        ->where('courseId', '[A-Za-z0-9._-]+')
-        ->name('courses.coursework');
+$router->get('assignments.create', '/assignments/create', [AssignmentController::class, 'create'], ['auth']);
+$router->post('assignments.store', '/assignments', [AssignmentController::class, 'store'], ['auth', 'csrf']);
+$router->delete('assignments.destroy', '/assignments/{assignmentId}', [AssignmentController::class, 'destroy'], ['auth', 'csrf']);
+$router->get('assignments.grading', '/assignments/{assignmentId}/grading', [GradingController::class, 'show'], ['auth']);
+$router->post('assignments.grading.trigger', '/assignments/{assignmentId}/grading/trigger', [GradingController::class, 'trigger'], ['auth', 'csrf']);
 
-    Route::get('/assignments/create', [AssignmentController::class, 'create'])->name('assignments.create');
-    Route::post('/assignments', [AssignmentController::class, 'store'])->name('assignments.store');
-    Route::delete('/assignments/{assignment}', [AssignmentController::class, 'destroy'])->name('assignments.destroy');
-    Route::get('/assignments/{assignment}/grading', [GradingController::class, 'show'])->name('assignments.grading');
-    Route::post('/assignments/{assignment}/grading/trigger', [GradingController::class, 'trigger'])->name('assignments.grading.trigger');
-});
+$router->post('api.n8n.google-access-token', '/api/n8n/google-access-token', [N8nTokenController::class, 'show']);

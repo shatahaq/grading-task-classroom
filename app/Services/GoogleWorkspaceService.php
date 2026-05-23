@@ -1,184 +1,191 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Services;
 
-use App\Models\OauthToken;
-use App\Models\User;
-use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\Crypt;
-use Illuminate\Support\Facades\Http;
+use App\Repositories\OauthTokenRepository;
+use App\Security\Crypto;
+use App\Support\HttpClient;
+use DateTimeImmutable;
+use DateTimeZone;
 use RuntimeException;
 
-class GoogleWorkspaceService
+final class GoogleWorkspaceService
 {
-    public function accessToken(User $user): string
-    {
-        $oauthToken = $user->oauthToken;
+    private OauthTokenRepository $tokens;
+    private HttpClient $http;
 
-        if (! $oauthToken || $oauthToken->revoked) {
+    public function __construct()
+    {
+        $this->tokens = new OauthTokenRepository();
+        $this->http = new HttpClient();
+    }
+
+    public function accessToken(array $user): string
+    {
+        $token = $this->tokens->findByUserId((int) $user['id']);
+
+        if (! $token || (int) ($token['revoked'] ?? 0) === 1) {
             throw new RuntimeException('Akun Google belum tersambung.');
         }
 
-        if ($oauthToken->expiry_date && $oauthToken->expiry_date->isFuture() && $oauthToken->expiry_date->greaterThan(now()->addMinutes(2))) {
-            return $oauthToken->accessToken();
+        $expiry = ! empty($token['expiry_date']) ? strtotime((string) $token['expiry_date']) : null;
+
+        if ($expiry !== null && $expiry > time() + 120) {
+            return (string) Crypto::decrypt((string) $token['access_token_encrypted']);
         }
 
-        return $this->refreshAccessToken($oauthToken);
+        return $this->refreshAccessToken($token);
     }
 
-    public function refreshAccessToken(OauthToken $oauthToken): string
+    public function refreshAccessToken(array $token): string
     {
-        $refreshToken = $oauthToken->refreshToken();
+        $refreshToken = Crypto::decrypt($token['refresh_token_encrypted'] ?? null);
 
         if (! $refreshToken) {
-            throw new RuntimeException('Refresh token Google tidak tersedia. Silakan disconnect lalu login Google ulang.');
+            throw new RuntimeException('Refresh token Google tidak tersedia. Putuskan koneksi lalu login Google ulang.');
         }
 
-        $response = Http::asForm()
-            ->timeout(30)
-            ->post('https://oauth2.googleapis.com/token', [
-                'client_id' => config('services.google.client_id'),
-                'client_secret' => config('services.google.client_secret'),
-                'refresh_token' => $refreshToken,
-                'grant_type' => 'refresh_token',
-            ])
-            ->throw();
-
-        $payload = $response->json();
-
-        $oauthToken->update([
-            'access_token_encrypted' => Crypt::encryptString($payload['access_token']),
-            'expiry_date' => isset($payload['expires_in']) ? now()->addSeconds((int) $payload['expires_in']) : null,
-            'token_type' => $payload['token_type'] ?? 'Bearer',
-            'last_refreshed_at' => now(),
-            'revoked' => false,
+        $response = $this->http->postForm('https://oauth2.googleapis.com/token', [
+            'client_id' => config('services.google.client_id'),
+            'client_secret' => config('services.google.client_secret'),
+            'refresh_token' => $refreshToken,
+            'grant_type' => 'refresh_token',
         ]);
 
-        return $payload['access_token'];
+        if (! $response['successful'] || ! is_array($response['json'])) {
+            throw new RuntimeException('Refresh token Google gagal: ' . str_limit((string) $response['body'], 180));
+        }
+
+        $payload = $response['json'];
+        $accessToken = (string) ($payload['access_token'] ?? '');
+
+        if ($accessToken === '') {
+            throw new RuntimeException('Google tidak mengembalikan access token.');
+        }
+
+        $expiryDate = isset($payload['expires_in'])
+            ? date('Y-m-d H:i:s', time() + (int) $payload['expires_in'])
+            : null;
+
+        $this->tokens->updateAccessToken(
+            (int) $token['id'],
+            Crypto::encrypt($accessToken),
+            $expiryDate,
+            (string) ($payload['token_type'] ?? 'Bearer')
+        );
+
+        return $accessToken;
     }
 
-    public function listCourses(User $user): array
+    public function listCourses(array $user): array
     {
         $courses = [];
         $pageToken = null;
 
         do {
-            $response = $this->google($user)
-                ->get('https://classroom.googleapis.com/v1/courses', array_filter([
-                    'teacherId' => 'me',
-                    'courseStates' => 'ACTIVE',
-                    'pageSize' => 100,
-                    'pageToken' => $pageToken,
-                ]))
-                ->throw();
+            $response = $this->googleGet($user, 'https://classroom.googleapis.com/v1/courses', array_filter([
+                'teacherId' => 'me',
+                'courseStates' => 'ACTIVE',
+                'pageSize' => 100,
+                'pageToken' => $pageToken,
+            ]));
 
-            $courses = array_merge($courses, $response->json('courses', []));
-            $pageToken = $response->json('nextPageToken');
+            $courses = array_merge($courses, $response['courses'] ?? []);
+            $pageToken = $response['nextPageToken'] ?? null;
         } while ($pageToken);
 
-        return collect($courses)
-            ->map(fn (array $course) => [
-                'id' => $course['id'] ?? '',
-                'name' => $course['name'] ?? 'Tanpa nama',
-                'section' => $course['section'] ?? '-',
+        return array_values(array_filter(array_map(static function (array $course): array {
+            return [
+                'id' => (string) ($course['id'] ?? ''),
+                'name' => (string) ($course['name'] ?? 'Tanpa nama'),
+                'section' => (string) ($course['section'] ?? '-'),
                 'descriptionHeading' => $course['descriptionHeading'] ?? null,
                 'alternateLink' => $course['alternateLink'] ?? null,
                 'students' => null,
                 'assignments' => [],
                 'source' => 'google',
-            ])
-            ->filter(fn (array $course) => filled($course['id']))
-            ->values()
-            ->all();
+            ];
+        }, $courses), static fn (array $course): bool => $course['id'] !== ''));
     }
 
-    public function listCourseWork(User $user, string $courseId): array
+    public function listCourseWork(array $user, string $courseId): array
     {
         $courseWork = [];
         $pageToken = null;
+        $courseId = rawurlencode($courseId);
 
         do {
-            $response = $this->google($user)
-                ->get("https://classroom.googleapis.com/v1/courses/{$courseId}/courseWork", array_filter([
-                    'pageSize' => 100,
-                    'orderBy' => 'updateTime desc',
-                    'pageToken' => $pageToken,
-                ]))
-                ->throw();
+            $response = $this->googleGet($user, "https://classroom.googleapis.com/v1/courses/{$courseId}/courseWork", array_filter([
+                'pageSize' => 100,
+                'orderBy' => 'updateTime desc',
+                'pageToken' => $pageToken,
+            ]));
 
-            $courseWork = array_merge($courseWork, $response->json('courseWork', []));
-            $pageToken = $response->json('nextPageToken');
+            $courseWork = array_merge($courseWork, $response['courseWork'] ?? []);
+            $pageToken = $response['nextPageToken'] ?? null;
         } while ($pageToken);
 
-        return collect($courseWork)
-            ->map(fn (array $work) => [
-                'id' => $work['id'] ?? '',
-                'title' => $work['title'] ?? 'Tanpa judul',
-                'description' => $work['description'] ?? null,
-                'due' => $this->formatDueDate($work),
-                'status' => $work['state'] ?? 'UNKNOWN',
-                'max_points' => $work['maxPoints'] ?? null,
-                'alternateLink' => $work['alternateLink'] ?? null,
-                'creationTime' => $work['creationTime'] ?? null,
-                'updateTime' => $work['updateTime'] ?? null,
-            ])
-            ->values()
-            ->all();
+        return array_map(fn (array $work): array => [
+            'id' => (string) ($work['id'] ?? ''),
+            'title' => (string) ($work['title'] ?? 'Tanpa judul'),
+            'description' => $work['description'] ?? null,
+            'due' => $this->formatDueDate($work),
+            'status' => (string) ($work['state'] ?? 'UNKNOWN'),
+            'max_points' => $work['maxPoints'] ?? null,
+            'alternateLink' => $work['alternateLink'] ?? null,
+            'creationTime' => $work['creationTime'] ?? null,
+            'updateTime' => $work['updateTime'] ?? null,
+        ], $courseWork);
     }
 
-    public function listCourseStudents(User $user, string $courseId): array
+    public function listCourseStudents(array $user, string $courseId): array
     {
         $students = [];
         $pageToken = null;
+        $courseId = rawurlencode($courseId);
 
         do {
-            $response = $this->google($user)
-                ->get("https://classroom.googleapis.com/v1/courses/{$courseId}/students", array_filter([
-                    'pageSize' => 100,
-                    'pageToken' => $pageToken,
-                ]))
-                ->throw();
+            $response = $this->googleGet($user, "https://classroom.googleapis.com/v1/courses/{$courseId}/students", array_filter([
+                'pageSize' => 100,
+                'pageToken' => $pageToken,
+            ]));
 
-            $students = array_merge($students, $response->json('students', []));
-            $pageToken = $response->json('nextPageToken');
+            $students = array_merge($students, $response['students'] ?? []);
+            $pageToken = $response['nextPageToken'] ?? null;
         } while ($pageToken);
 
-        return collect($students)
-            ->map(fn (array $student) => [
-                'id' => $student['userId'] ?? '',
-                'name' => $student['profile']['name']['fullName'] ?? 'Tanpa nama',
+        return array_values(array_filter(array_map(static function (array $student): array {
+            return [
+                'id' => (string) ($student['userId'] ?? ''),
+                'name' => (string) ($student['profile']['name']['fullName'] ?? 'Tanpa nama'),
                 'email' => $student['profile']['emailAddress'] ?? null,
-            ])
-            ->filter(fn (array $student) => filled($student['id']))
-            ->values()
-            ->all();
+            ];
+        }, $students), static fn (array $student): bool => $student['id'] !== ''));
     }
 
-    public function countCourseStudents(User $user, string $courseId): int
+    public function countCourseStudents(array $user, string $courseId): int
     {
         return count($this->listCourseStudents($user, $courseId));
     }
 
-    public function createCourseWork(User $user, array $data): array
+    public function createCourseWork(array $user, array $data): array
     {
-        // Only the question file is attached to Classroom. Rubric and answer key stay private for n8n grading.
-        $classroomFiles = [
-            'question' => $data['drive_files']['question'] ?? null,
-        ];
+        $questionFile = $data['drive_files']['question'] ?? null;
+        $materials = [];
 
-        $materials = collect($classroomFiles)
-            ->filter(fn ($file) => is_array($file) && filled($file['id'] ?? null))
-            ->map(fn (array $file) => [
+        if (is_array($questionFile) && ! empty($questionFile['id'])) {
+            $materials[] = [
                 'driveFile' => [
                     'driveFile' => [
-                        'id' => $file['id'],
-                        'title' => $file['name'] ?? 'Lampiran AutoGrade AI',
+                        'id' => $questionFile['id'],
+                        'title' => $questionFile['name'] ?? 'Lampiran AutoGrade AI',
                     ],
                     'shareMode' => 'VIEW',
                 ],
-            ])
-            ->values()
-            ->all();
+            ];
+        }
 
         $payload = [
             'title' => $data['title'],
@@ -189,15 +196,17 @@ class GoogleWorkspaceService
         ];
 
         if (! empty($data['due_date'])) {
-            $dueDate = \Carbon\Carbon::parse($data['due_date'])->utc();
+            $dueDate = (new DateTimeImmutable((string) $data['due_date'], new DateTimeZone((string) config('app.timezone'))))
+                ->setTimezone(new DateTimeZone('UTC'));
+
             $payload['dueDate'] = [
-                'year' => $dueDate->year,
-                'month' => $dueDate->month,
-                'day' => $dueDate->day,
+                'year' => (int) $dueDate->format('Y'),
+                'month' => (int) $dueDate->format('m'),
+                'day' => (int) $dueDate->format('d'),
             ];
             $payload['dueTime'] = [
-                'hours' => $dueDate->hour,
-                'minutes' => $dueDate->minute,
+                'hours' => (int) $dueDate->format('H'),
+                'minutes' => (int) $dueDate->format('i'),
             ];
 
             if (! empty($data['close_on_due'])) {
@@ -209,32 +218,32 @@ class GoogleWorkspaceService
             $payload['materials'] = $materials;
         }
 
-        $response = $this->google($user)
-            ->post("https://classroom.googleapis.com/v1/courses/{$data['course_id']}/courseWork", $payload)
-            ->throw();
-
-        return $response->json();
+        return $this->googlePostJson(
+            $user,
+            'https://classroom.googleapis.com/v1/courses/' . rawurlencode((string) $data['course_id']) . '/courseWork',
+            $payload
+        );
     }
 
-    public function uploadAssignmentFiles(User $user, array $files): array
+    /** @param array<string, array<string, mixed>> $files */
+    public function uploadAssignmentFiles(array $user, array $files): array
     {
         $rootFolderId = $this->ensureFolder($user, 'AutoGrade AI');
-        $teacherFolderId = $this->ensureFolder($user, $user->email, $rootFolderId);
-        $assignmentFolderId = $this->ensureFolder($user, now()->format('Ymd-His').'-assignment', $teacherFolderId);
+        $teacherFolderId = $this->ensureFolder($user, (string) $user['email'], $rootFolderId);
+        $assignmentFolderId = $this->ensureFolder($user, date('Ymd-His') . '-assignment', $teacherFolderId);
 
         $targets = [
             'question' => 'Soal',
             'rubric' => 'Rubrik',
             'answer_key' => 'Kunci Jawaban',
         ];
-
         $uploaded = [
             'folder_id' => $assignmentFolderId,
             'files' => [],
         ];
 
         foreach ($targets as $key => $folderName) {
-            if (! isset($files[$key]) || ! $files[$key] instanceof UploadedFile) {
+            if (! isset($files[$key])) {
                 continue;
             }
 
@@ -245,34 +254,40 @@ class GoogleWorkspaceService
         return $uploaded;
     }
 
-    public function revoke(User $user): void
+    public function revoke(array $user): void
     {
-        $oauthToken = $user->oauthToken;
+        $token = (new OauthTokenRepository())->findByUserId((int) $user['id']);
 
-        if (! $oauthToken) {
+        if (! $token) {
             return;
         }
 
-        rescue(function () use ($oauthToken) {
-            Http::asForm()
-                ->timeout(15)
-                ->post('https://oauth2.googleapis.com/revoke', [
-                    'token' => $oauthToken->accessToken(),
-                ]);
-        }, report: false);
+        try {
+            $this->http->postForm('https://oauth2.googleapis.com/revoke', [
+                'token' => Crypto::decrypt($token['access_token_encrypted']) ?? '',
+            ], timeout: 15);
+        } catch (\Throwable) {
+            // Local disconnect must still succeed even when Google revoke is temporarily unavailable.
+        }
 
-        $oauthToken->delete();
+        $this->tokens->deleteByUserId((int) $user['id']);
     }
 
-    public function google(User $user, int $timeout = 15)
+    private function googleGet(array $user, string $url, array $query = []): array
     {
-        return Http::withToken($this->accessToken($user))
-            ->acceptJson()
-            ->connectTimeout(5)
-            ->timeout($timeout);
+        $response = $this->http->get($url, $query, ['Authorization: Bearer ' . $this->accessToken($user)]);
+
+        return $this->expectJson($response);
     }
 
-    private function ensureFolder(User $user, string $name, ?string $parentId = null): string
+    private function googlePostJson(array $user, string $url, array $payload): array
+    {
+        $response = $this->http->postJson($url, $payload, ['Authorization: Bearer ' . $this->accessToken($user)]);
+
+        return $this->expectJson($response);
+    }
+
+    private function ensureFolder(array $user, string $name, ?string $parentId = null): string
     {
         $existing = $this->findFolder($user, $name, $parentId);
 
@@ -289,74 +304,87 @@ class GoogleWorkspaceService
             $metadata['parents'] = [$parentId];
         }
 
-        $response = $this->google($user)
-            ->post('https://www.googleapis.com/drive/v3/files?fields=id,name', $metadata)
-            ->throw();
+        $response = $this->googlePostJson($user, 'https://www.googleapis.com/drive/v3/files?fields=id,name', $metadata);
 
-        return $response->json('id');
+        return (string) ($response['id'] ?? throw new RuntimeException('Google Drive tidak mengembalikan folder id.'));
     }
 
-    private function findFolder(User $user, string $name, ?string $parentId = null): ?string
+    private function findFolder(array $user, string $name, ?string $parentId = null): ?string
     {
-        $query = "mimeType='application/vnd.google-apps.folder' and name='".$this->escapeDriveQuery($name)."' and trashed=false";
+        $query = "mimeType='application/vnd.google-apps.folder' and name='" . $this->escapeDriveQuery($name) . "' and trashed=false";
 
         if ($parentId) {
-            $query .= " and '".$this->escapeDriveQuery($parentId)."' in parents";
+            $query .= " and '" . $this->escapeDriveQuery($parentId) . "' in parents";
         }
 
-        $response = $this->google($user)
-            ->get('https://www.googleapis.com/drive/v3/files', [
-                'q' => $query,
-                'fields' => 'files(id,name)',
-                'pageSize' => 1,
-            ])
-            ->throw();
+        $response = $this->googleGet($user, 'https://www.googleapis.com/drive/v3/files', [
+            'q' => $query,
+            'fields' => 'files(id,name)',
+            'pageSize' => 1,
+        ]);
 
-        return $response->json('files.0.id');
+        return $response['files'][0]['id'] ?? null;
     }
 
-    private function uploadFile(User $user, UploadedFile $file, string $folderId): array
+    private function uploadFile(array $user, array $file, string $folderId): array
     {
+        $tmpName = (string) ($file['tmp_name'] ?? '');
+
+        if ($tmpName === '' || ! is_file($tmpName)) {
+            throw new RuntimeException('File upload tidak valid.');
+        }
+
         $metadata = [
-            'name' => $file->getClientOriginalName(),
+            'name' => basename((string) $file['name']),
             'parents' => [$folderId],
         ];
-
-        $boundary = 'autograde_ai_'.bin2hex(random_bytes(8));
+        $boundary = 'autograde_ai_' . bin2hex(random_bytes(8));
+        $mime = mime_content_type($tmpName) ?: 'application/octet-stream';
         $body = "--{$boundary}\r\n"
-            ."Content-Type: application/json; charset=UTF-8\r\n\r\n"
-            .json_encode($metadata)
-            ."\r\n--{$boundary}\r\n"
-            .'Content-Type: '.($file->getMimeType() ?: 'application/octet-stream')."\r\n\r\n"
-            .file_get_contents($file->getRealPath())
-            ."\r\n--{$boundary}--";
+            . "Content-Type: application/json; charset=UTF-8\r\n\r\n"
+            . json_encode($metadata, JSON_THROW_ON_ERROR)
+            . "\r\n--{$boundary}\r\n"
+            . 'Content-Type: ' . $mime . "\r\n\r\n"
+            . file_get_contents($tmpName)
+            . "\r\n--{$boundary}--";
 
-        $response = $this->google($user, 60)
-            ->withBody($body, "multipart/related; boundary={$boundary}")
-            ->post('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink,mimeType')
-            ->throw();
+        $response = $this->http->postRaw(
+            'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink,mimeType',
+            $body,
+            "multipart/related; boundary={$boundary}",
+            ['Authorization: Bearer ' . $this->accessToken($user)],
+            60
+        );
 
-        return $response->json();
+        return $this->expectJson($response);
+    }
+
+    private function expectJson(array $response): array
+    {
+        if (! $response['successful']) {
+            throw new RuntimeException('Google API gagal (' . $response['status'] . '): ' . str_limit((string) $response['body'], 180));
+        }
+
+        if (! is_array($response['json'])) {
+            throw new RuntimeException('Google API mengembalikan response tidak valid.');
+        }
+
+        return $response['json'];
     }
 
     private function escapeDriveQuery(string $value): string
     {
-        return str_replace(["\\", "'"], ["\\\\", "\\'"], $value);
+        return str_replace(['\\', "'"], ['\\\\', "\\'"], $value);
     }
 
     private function formatDueDate(array $work): string
     {
-        if (! isset($work['dueDate'])) {
+        if (! isset($work['dueDate']) || ! is_array($work['dueDate'])) {
             return '-';
         }
 
         $date = $work['dueDate'];
 
-        return sprintf(
-            '%04d-%02d-%02d',
-            $date['year'] ?? now()->year,
-            $date['month'] ?? 1,
-            $date['day'] ?? 1,
-        );
+        return sprintf('%04d-%02d-%02d', $date['year'] ?? (int) date('Y'), $date['month'] ?? 1, $date['day'] ?? 1);
     }
 }
