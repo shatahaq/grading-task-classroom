@@ -9,6 +9,9 @@
 .env
 .env.backup
 .env.production
+/autograde-deploy-secrets.txt
+/deploy-vps-autograde.md
+*.pem
 .phpactor.json
 .phpunit.result.cache
 Homestead.json

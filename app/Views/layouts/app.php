@@ -19,13 +19,16 @@ $navItems = [
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="icon" href="<?= e(asset('autograde-icon.svg')) ?>" type="image/svg+xml">
     <link rel="stylesheet" href="<?= e(asset('app.css')) ?>">
 </head>
 <body>
     <header class="site-header">
         <div class="header-inner">
             <a class="brand" href="<?= e(route('dashboard')) ?>">
-                <span class="brand-mark">AI</span>
+                <span class="brand-mark" aria-hidden="true">
+                    <img src="<?= e(asset('autograde-icon.svg')) ?>" alt="">
+                </span>
                 <span class="brand-text">AUTOGRADE AI</span>
             </a>
 
@@ -43,11 +46,6 @@ $navItems = [
                     <span><?= e($displayName) ?></span>
                     <?php if ($displayEmail): ?><small><?= e($displayEmail) ?></small><?php endif; ?>
                 </div>
-                <span class="status-chip <?= $tokenStatusText === 'Tersambung' ? 'ok' : 'warn' ?>"><?= e($tokenStatusText) ?></span>
-                <form method="post" action="<?= e(route('auth.google.disconnect')) ?>">
-                    <?= csrf_field() ?>
-                    <button class="header-action" type="submit">Putus</button>
-                </form>
                 <form method="post" action="<?= e(route('logout')) ?>">
                     <?= csrf_field() ?>
                     <button class="header-action" type="submit">Keluar</button>
@@ -57,14 +55,6 @@ $navItems = [
     </header>
 
     <main class="page-wrap">
-        <section class="page-heading">
-            <div>
-                <p class="technical-label">AutoGrade Workspace</p>
-                <h1><?= e($pageTitle ?? 'AutoGrade AI') ?></h1>
-                <p><?= e($pageCaption ?? 'Platform penilaian otomatis untuk dosen.') ?></p>
-            </div>
-        </section>
-
         <?php if ($message = flash_get('status')): ?>
             <div class="alert success" role="status"><?= e($message) ?></div>
         <?php endif; ?>

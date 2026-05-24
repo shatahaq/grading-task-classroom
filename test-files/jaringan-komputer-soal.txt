@@ -1,0 +1,37 @@
+SOAL UJIAN / TUGAS
+Mata Kuliah: Jaringan Komputer
+Topik: Model jaringan, addressing, subnetting, routing, dan troubleshooting
+
+Petunjuk:
+1. Jawab semua pertanyaan dengan penjelasan yang jelas dan runtut.
+2. Untuk soal perhitungan subnet, tuliskan langkah perhitungan.
+3. Gunakan istilah teknis jaringan komputer secara tepat.
+
+Soal:
+
+1. Jelaskan perbedaan fungsi model OSI dan model TCP/IP. Sebutkan masing-masing layer pada kedua model tersebut, lalu berikan contoh protokol yang bekerja pada minimal tiga layer berbeda.
+
+2. Sebuah jaringan menggunakan alamat IP 192.168.10.0/24 dan harus dibagi menjadi minimal 4 subnet dengan jumlah host yang relatif sama.
+   a. Tentukan prefix subnet baru yang sesuai.
+   b. Tentukan subnet mask dalam format desimal bertitik.
+   c. Tuliskan network address, rentang host valid, dan broadcast address untuk empat subnet pertama.
+   d. Berapa jumlah host valid pada setiap subnet?
+
+3. Jelaskan perbedaan TCP dan UDP dari sisi mekanisme koneksi, keandalan pengiriman data, kontrol aliran, overhead, dan contoh penggunaannya.
+
+4. Sebuah komputer di jaringan lokal mendapatkan IP 169.254.20.10 dan tidak dapat mengakses internet.
+   a. Jelaskan kemungkinan penyebab utama kondisi tersebut.
+   b. Jelaskan langkah troubleshooting yang dapat dilakukan dari sisi client, DHCP server, dan perangkat jaringan.
+
+5. Jelaskan fungsi DNS, DHCP, NAT, dan default gateway dalam jaringan komputer. Berikan contoh sederhana bagaimana keempat komponen tersebut bekerja saat pengguna membuka website https://example.com dari jaringan rumah atau kampus.
+
+6. Jelaskan perbedaan routing statis dan routing dinamis. Berikan contoh kondisi kapan routing statis lebih tepat digunakan dan kapan routing dinamis lebih tepat digunakan.
+
+7. Perhatikan skenario berikut:
+   - PC A memiliki IP 192.168.1.10/24 dengan gateway 192.168.1.1.
+   - PC B memiliki IP 192.168.2.20/24 dengan gateway 192.168.2.1.
+   - Kedua subnet terhubung melalui router.
+   PC A tidak dapat melakukan ping ke PC B.
+   Jelaskan minimal lima kemungkinan penyebab masalah dan cara memeriksanya.
+
+8. Jelaskan apa yang dimaksud dengan collision domain dan broadcast domain. Bagaimana penggunaan switch, router, dan VLAN memengaruhi kedua domain tersebut?

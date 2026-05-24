@@ -29,7 +29,9 @@ final class Request
     {
         $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
 
-        return '/' . trim($path, '/') ?: '/';
+        $normalized = trim($path, '/');
+
+        return $normalized === '' ? '/' : '/' . $normalized;
     }
 
     public function input(string $key, mixed $default = null): mixed

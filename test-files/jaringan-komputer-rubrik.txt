@@ -1,0 +1,77 @@
+RUBRIK PENILAIAN
+Mata Kuliah: Jaringan Komputer
+Total Nilai: 100 poin
+
+Kriteria umum:
+- Jawaban harus relevan dengan pertanyaan.
+- Penjelasan harus menggunakan istilah jaringan komputer yang tepat.
+- Untuk soal hitungan, langkah perhitungan harus terlihat.
+- Jawaban yang benar tetapi tanpa penjelasan memadai dapat diberi nilai sebagian.
+- Jawaban yang tidak sesuai konteks atau hanya menyalin definisi tanpa penerapan diberi nilai rendah.
+
+Rincian penilaian:
+
+1. Model OSI dan TCP/IP - 12 poin
+   - Menjelaskan fungsi model OSI dan TCP/IP sebagai model referensi/arsitektur jaringan: 2 poin
+   - Menyebutkan 7 layer OSI dengan urutan benar: 3 poin
+   - Menyebutkan layer TCP/IP dengan benar: 2 poin
+   - Menjelaskan pemetaan umum OSI ke TCP/IP: 2 poin
+   - Memberikan minimal tiga contoh protokol pada layer yang tepat: 3 poin
+
+2. Subnetting 192.168.10.0/24 menjadi minimal 4 subnet - 18 poin
+   - Menentukan prefix baru /26: 3 poin
+   - Menentukan subnet mask 255.255.255.192: 3 poin
+   - Menentukan block size 64 alamat: 2 poin
+   - Menuliskan empat network address pertama dengan benar: 3 poin
+   - Menuliskan rentang host valid tiap subnet dengan benar: 4 poin
+   - Menuliskan broadcast address tiap subnet dengan benar: 2 poin
+   - Menentukan 62 host valid per subnet: 1 poin
+
+3. TCP dan UDP - 12 poin
+   - Menjelaskan TCP connection-oriented dan UDP connectionless: 2 poin
+   - Menjelaskan keandalan TCP melalui ACK, retransmission, sequencing: 3 poin
+   - Menjelaskan UDP tidak menjamin delivery/order dan lebih ringan: 2 poin
+   - Membandingkan kontrol aliran/kongesti dan overhead: 3 poin
+   - Memberikan contoh penggunaan TCP dan UDP yang tepat: 2 poin
+
+4. IP 169.254.x.x dan troubleshooting DHCP - 12 poin
+   - Mengidentifikasi 169.254.x.x sebagai APIPA/link-local akibat gagal DHCP: 3 poin
+   - Menjelaskan kemungkinan penyebab seperti DHCP server mati, kabel/Wi-Fi bermasalah, VLAN salah, scope habis, firewall: 3 poin
+   - Menjelaskan pemeriksaan client seperti cek koneksi, renew IP, cek konfigurasi adapter: 2 poin
+   - Menjelaskan pemeriksaan DHCP server seperti service, scope, lease, log: 2 poin
+   - Menjelaskan pemeriksaan perangkat jaringan seperti switch, access point, VLAN, relay: 2 poin
+
+5. DNS, DHCP, NAT, dan default gateway - 14 poin
+   - Menjelaskan fungsi DNS: 2 poin
+   - Menjelaskan fungsi DHCP: 2 poin
+   - Menjelaskan fungsi NAT: 2 poin
+   - Menjelaskan fungsi default gateway: 2 poin
+   - Menjelaskan alur ketika user membuka website secara runtut: 5 poin
+   - Menyebutkan hubungan IP lokal, IP publik, dan akses internet: 1 poin
+
+6. Routing statis dan dinamis - 10 poin
+   - Menjelaskan routing statis dikonfigurasi manual: 2 poin
+   - Menjelaskan routing dinamis memakai protokol routing: 2 poin
+   - Memberikan contoh protokol routing dinamis seperti RIP, OSPF, EIGRP, BGP: 2 poin
+   - Menjelaskan kondisi cocok untuk routing statis: 2 poin
+   - Menjelaskan kondisi cocok untuk routing dinamis: 2 poin
+
+7. Troubleshooting antar subnet - 14 poin
+   - Menyebutkan kemungkinan gateway salah/tidak aktif dan cara cek: 2 poin
+   - Menyebutkan route antar subnet belum tersedia/salah dan cara cek routing table: 2 poin
+   - Menyebutkan firewall/ACL memblok ICMP dan cara cek: 2 poin
+   - Menyebutkan subnet mask/IP salah dan cara validasi: 2 poin
+   - Menyebutkan masalah fisik/link/VLAN/switch port dan cara cek: 2 poin
+   - Menyebutkan ARP atau konflik IP sebagai kemungkinan masalah: 2 poin
+   - Menyusun langkah troubleshooting runtut dari layer bawah ke atas: 2 poin
+
+8. Collision domain dan broadcast domain - 8 poin
+   - Menjelaskan collision domain dengan benar: 2 poin
+   - Menjelaskan broadcast domain dengan benar: 2 poin
+   - Menjelaskan switch memisahkan collision domain per port tetapi tidak memisahkan broadcast domain tanpa VLAN: 2 poin
+   - Menjelaskan router dan VLAN memisahkan broadcast domain: 2 poin
+
+Catatan penilaian:
+- Toleransi istilah diperbolehkan selama makna teknis benar.
+- Kesalahan hitung subnet yang kecil dapat diberi nilai sebagian jika metode benar.
+- Jawaban yang menyebut tools troubleshooting seperti ping, ipconfig/ifconfig, traceroute/tracert, nslookup, arp, dan pemeriksaan routing table dapat diberi apresiasi dalam bagian terkait.

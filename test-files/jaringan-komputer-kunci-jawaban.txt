@@ -1,0 +1,205 @@
+KUNCI JAWABAN
+Mata Kuliah: Jaringan Komputer
+
+1. Model OSI dan TCP/IP
+
+Model OSI adalah model referensi konseptual yang membagi komunikasi jaringan menjadi 7 layer agar proses komunikasi lebih mudah dipahami, dianalisis, dan ditroubleshoot. Layer OSI dari bawah ke atas adalah:
+1. Physical
+2. Data Link
+3. Network
+4. Transport
+5. Session
+6. Presentation
+7. Application
+
+Model TCP/IP adalah model arsitektur protokol yang lebih praktis dan digunakan pada internet. Layer TCP/IP umumnya terdiri dari:
+1. Link / Network Access
+2. Internet
+3. Transport
+4. Application
+
+Pemetaan umum:
+- OSI Physical dan Data Link setara dengan TCP/IP Link.
+- OSI Network setara dengan TCP/IP Internet.
+- OSI Transport setara dengan TCP/IP Transport.
+- OSI Session, Presentation, dan Application setara dengan TCP/IP Application.
+
+Contoh protokol:
+- Ethernet bekerja pada Data Link/Link.
+- IP bekerja pada Network/Internet.
+- TCP dan UDP bekerja pada Transport.
+- HTTP, HTTPS, DNS, DHCP, SMTP, dan FTP bekerja pada Application.
+
+2. Subnetting 192.168.10.0/24 menjadi minimal 4 subnet
+
+Jaringan awal: 192.168.10.0/24
+Kebutuhan: minimal 4 subnet dengan jumlah host relatif sama.
+
+Untuk membuat 4 subnet, perlu meminjam 2 bit dari bagian host karena 2^2 = 4.
+Prefix baru: /24 + 2 = /26
+Subnet mask: 255.255.255.192
+Block size: 256 - 192 = 64 alamat
+Jumlah alamat per subnet: 64
+Jumlah host valid per subnet: 64 - 2 = 62 host
+
+Empat subnet pertama:
+
+Subnet 1:
+- Network address: 192.168.10.0/26
+- Host valid: 192.168.10.1 sampai 192.168.10.62
+- Broadcast address: 192.168.10.63
+
+Subnet 2:
+- Network address: 192.168.10.64/26
+- Host valid: 192.168.10.65 sampai 192.168.10.126
+- Broadcast address: 192.168.10.127
+
+Subnet 3:
+- Network address: 192.168.10.128/26
+- Host valid: 192.168.10.129 sampai 192.168.10.190
+- Broadcast address: 192.168.10.191
+
+Subnet 4:
+- Network address: 192.168.10.192/26
+- Host valid: 192.168.10.193 sampai 192.168.10.254
+- Broadcast address: 192.168.10.255
+
+3. TCP dan UDP
+
+TCP adalah protokol transport yang connection-oriented. Sebelum mengirim data, TCP membangun koneksi menggunakan proses handshake. TCP menyediakan pengiriman data yang andal melalui sequence number, acknowledgment, retransmission, flow control, dan congestion control. Karena fitur tersebut, overhead TCP lebih besar.
+
+UDP adalah protokol transport yang connectionless. UDP tidak membangun koneksi sebelum mengirim data dan tidak menjamin data sampai, urutan data benar, atau data dikirim ulang ketika hilang. UDP memiliki overhead lebih kecil dan latensi lebih rendah.
+
+Contoh penggunaan TCP:
+- HTTP/HTTPS
+- SSH
+- FTP
+- SMTP/IMAP
+
+Contoh penggunaan UDP:
+- DNS query
+- VoIP
+- video streaming real-time
+- online gaming
+- DHCP
+
+4. IP 169.254.20.10 dan troubleshooting DHCP
+
+Alamat 169.254.x.x adalah alamat APIPA/link-local yang biasanya dipakai client ketika gagal mendapatkan alamat IP dari DHCP server. Artinya komputer tidak menerima lease DHCP yang valid sehingga tidak memiliki konfigurasi jaringan normal seperti IP lokal, subnet mask, gateway, dan DNS yang sesuai.
+
+Kemungkinan penyebab:
+- DHCP server mati atau service DHCP bermasalah.
+- Client tidak terhubung ke jaringan.
+- Kabel LAN, Wi-Fi, switch port, atau access point bermasalah.
+- VLAN client salah sehingga request DHCP tidak sampai.
+- DHCP scope habis.
+- DHCP relay/IP helper belum dikonfigurasi untuk jaringan berbeda.
+- Firewall atau security policy memblok trafik DHCP.
+
+Langkah troubleshooting dari sisi client:
+- Cek status koneksi fisik/Wi-Fi.
+- Jalankan ipconfig /all atau ifconfig/ip addr untuk melihat konfigurasi.
+- Jalankan ipconfig /release dan ipconfig /renew.
+- Pastikan adapter diset memperoleh IP otomatis.
+- Coba pindah port switch atau konek ke jaringan lain.
+
+Langkah troubleshooting dari sisi DHCP server:
+- Pastikan service DHCP aktif.
+- Cek scope/pool masih tersedia.
+- Cek lease dan log DHCP.
+- Pastikan konfigurasi gateway, DNS, dan subnet mask benar.
+
+Langkah troubleshooting perangkat jaringan:
+- Cek switch port, VLAN, trunk, dan access port.
+- Cek DHCP relay/IP helper jika DHCP server berada di subnet berbeda.
+- Cek firewall atau ACL yang mungkin memblok UDP port 67 dan 68.
+
+5. DNS, DHCP, NAT, dan default gateway
+
+DNS berfungsi menerjemahkan nama domain menjadi alamat IP, misalnya example.com menjadi alamat IP server tujuan.
+
+DHCP berfungsi memberikan konfigurasi IP otomatis kepada client, seperti IP address, subnet mask, default gateway, DNS server, dan lease time.
+
+NAT berfungsi menerjemahkan alamat IP privat di jaringan lokal menjadi alamat IP publik saat mengakses internet. NAT biasanya dilakukan oleh router.
+
+Default gateway adalah alamat router yang digunakan host untuk mengirim paket ke jaringan lain di luar subnet lokal.
+
+Contoh alur saat pengguna membuka https://example.com:
+1. Laptop mendapatkan konfigurasi dari DHCP, misalnya IP 192.168.1.20, gateway 192.168.1.1, dan DNS 8.8.8.8.
+2. Pengguna mengetik https://example.com di browser.
+3. Laptop mengirim query DNS untuk mencari IP dari example.com.
+4. Setelah IP tujuan diketahui, laptop memeriksa bahwa IP tujuan berada di luar subnet lokal.
+5. Paket dikirim ke default gateway 192.168.1.1.
+6. Router melakukan NAT, mengganti IP privat laptop dengan IP publik jaringan.
+7. Paket diteruskan ke internet menuju server example.com.
+8. Balasan dari server kembali ke IP publik router.
+9. Router memakai tabel NAT untuk mengirim balasan ke laptop internal yang benar.
+
+6. Routing statis dan routing dinamis
+
+Routing statis adalah routing yang rutenya dikonfigurasi manual oleh administrator jaringan. Routing statis sederhana, mudah diprediksi, dan cocok untuk jaringan kecil atau rute yang jarang berubah.
+
+Routing dinamis adalah routing yang menggunakan protokol routing agar router dapat bertukar informasi rute secara otomatis. Contoh protokol routing dinamis adalah RIP, OSPF, EIGRP, IS-IS, dan BGP.
+
+Routing statis lebih tepat digunakan ketika:
+- Jaringan kecil dan topologi sederhana.
+- Hanya ada satu jalur keluar, misalnya default route ke internet.
+- Administrator ingin kontrol penuh dan perubahan jaringan jarang terjadi.
+
+Routing dinamis lebih tepat digunakan ketika:
+- Jaringan besar dengan banyak router.
+- Topologi sering berubah.
+- Dibutuhkan failover otomatis jika link putus.
+- Dibutuhkan pemilihan jalur otomatis berdasarkan metric.
+
+7. PC A tidak dapat ping ke PC B antar subnet
+
+Kemungkinan penyebab dan cara memeriksa:
+
+1. Default gateway PC A atau PC B salah.
+   - Periksa konfigurasi IP dengan ipconfig /all atau ip addr.
+   - Pastikan PC A memakai gateway 192.168.1.1 dan PC B memakai gateway 192.168.2.1.
+
+2. Interface router untuk salah satu subnet mati atau salah alamat.
+   - Periksa status interface router.
+   - Ping gateway dari masing-masing PC.
+
+3. Route antar subnet belum ada atau salah.
+   - Periksa routing table pada router.
+   - Pastikan router mengetahui jaringan 192.168.1.0/24 dan 192.168.2.0/24.
+
+4. Firewall pada PC atau router memblok ICMP.
+   - Cek firewall host.
+   - Cek ACL pada router.
+   - Uji koneksi dengan protokol lain jika perlu.
+
+5. Subnet mask salah.
+   - Pastikan PC A dan PC B memakai /24 atau 255.255.255.0 sesuai skenario.
+   - Subnet mask yang salah dapat membuat host salah menentukan jaringan lokal dan remote.
+
+6. Masalah fisik atau Data Link.
+   - Cek kabel, switch port, VLAN, access port, dan trunk.
+   - Pastikan link up.
+
+7. VLAN salah atau inter-VLAN routing belum aktif.
+   - Pastikan port PC A dan PC B berada di VLAN yang benar.
+   - Pastikan router-on-a-stick atau SVI dikonfigurasi dengan benar jika memakai VLAN.
+
+8. Konflik IP atau masalah ARP.
+   - Cek apakah ada host lain memakai IP yang sama.
+   - Periksa ARP table dengan arp -a.
+
+Langkah troubleshooting yang baik dimulai dari layer bawah: cek fisik/link, cek IP dan subnet mask, cek gateway, cek routing, cek firewall/ACL, lalu cek layanan atau aplikasi.
+
+8. Collision domain dan broadcast domain
+
+Collision domain adalah area jaringan tempat collision dapat terjadi ketika dua perangkat mengirim frame secara bersamaan pada media yang sama. Pada jaringan modern berbasis switch full-duplex, collision hampir tidak terjadi, tetapi konsepnya tetap penting untuk memahami pemisahan domain.
+
+Broadcast domain adalah area jaringan yang dapat menerima frame broadcast layer 2 yang sama. Contohnya ARP request akan diterima oleh perangkat dalam broadcast domain yang sama.
+
+Pengaruh perangkat:
+- Hub tidak memisahkan collision domain dan semua port berada dalam satu collision domain.
+- Switch memisahkan collision domain per port, sehingga setiap port switch menjadi collision domain terpisah.
+- Switch biasa tanpa VLAN tetap berada dalam satu broadcast domain yang sama.
+- VLAN memisahkan broadcast domain secara logis pada switch.
+- Router memisahkan broadcast domain karena router tidak meneruskan broadcast layer 2 secara default.

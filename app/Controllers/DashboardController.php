@@ -9,6 +9,8 @@ use App\Core\View;
 use App\Repositories\AssignmentRepository;
 use App\Repositories\GradingResultRepository;
 use App\Repositories\OauthTokenRepository;
+use App\Services\GoogleWorkspaceService;
+use Throwable;
 
 final class DashboardController
 {
@@ -18,6 +20,26 @@ final class DashboardController
         $assignments = (new AssignmentRepository())->allForTeacherWithStats((int) $user['id']);
         $assignmentIds = array_map(static fn (array $assignment): int => (int) $assignment['id'], $assignments);
         $results = (new GradingResultRepository())->forAssignments($assignmentIds);
+
+        // Build course name map from Google Classroom
+        $courseNameMap = [];
+
+        try {
+            $courses = (new GoogleWorkspaceService())->listCourses($user);
+
+            foreach ($courses as $course) {
+                $courseNameMap[(string) $course['id']] = $course['name'];
+            }
+        } catch (Throwable) {
+            // Fallback: course names will show as course_id
+        }
+
+        // Enrich assignments with course_name
+        $assignments = array_map(static function (array $assignment) use ($courseNameMap): array {
+            $assignment['course_name'] = $courseNameMap[(string) $assignment['course_id']] ?? (string) $assignment['course_id'];
+
+            return $assignment;
+        }, $assignments);
 
         $gradeDistribution = [
             'A' => 0,
@@ -36,7 +58,7 @@ final class DashboardController
             $gradeDistribution[$score >= 85 ? 'A' : ($score >= 70 ? 'B' : ($score >= 55 ? 'C' : ($score >= 40 ? 'D' : 'E')))]++;
         }
 
-        $classSummary = $this->classSummary($assignments, $results);
+        $classSummary = $this->classSummary($assignments, $results, $courseNameMap);
         $token = (new OauthTokenRepository())->findByUserId((int) $user['id']);
 
         View::render('dashboard/index', [
@@ -57,7 +79,7 @@ final class DashboardController
         ]);
     }
 
-    private function classSummary(array $assignments, array $results): array
+    private function classSummary(array $assignments, array $results, array $courseNameMap = []): array
     {
         $grouped = [];
 
@@ -83,7 +105,7 @@ final class DashboardController
 
             $summary[] = [
                 'id' => $courseId,
-                'name' => $courseId,
+                'name' => $courseNameMap[$courseId] ?? $courseId,
                 'students' => count($studentIds),
                 'active_assignments' => count($data['assignments'] ?? []),
                 'average' => $scores ? round(array_sum($scores) / count($scores), 1) : 0,
